@@ -1,6 +1,6 @@
 import { GoogleGenAI, type Schema } from "@google/genai";
 
-const DEFAULT_MODEL = "gemini-4-hydrogen";
+const DEFAULT_MODEL = "gemini-3.1-flash-lite";
 
 function getGeminiClient(): { ai: GoogleGenAI; model: string } {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
