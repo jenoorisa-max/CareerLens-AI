@@ -1,5 +1,5 @@
 import { Type, type Schema } from "@google/genai";
-import { generateStructuredJSON, formatGeminiError } from "../src/server/gemini";
+import { generateStructuredJSON, formatGeminiError } from "../src/server/gemini.ts";
 import type { StudentProfile, CareerFinderResponse } from "../src/types/career";
 
 const careerFinderSchema: Schema = {
