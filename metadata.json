@@ -1,0 +1,8 @@
+{
+  "name": "CareerLens AI",
+  "description": "Discover Your Career. Build Your Future. AI-powered career discovery, skill gap analysis, and personalized learning roadmaps for students.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
