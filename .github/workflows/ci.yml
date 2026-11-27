@@ -1,0 +1,57 @@
+# Continuous integration: lint, build and the automated regression suite.
+# No deployment happens here (Vercel deploys from GitHub on its own), no
+# secrets are used, and Gemini is always mocked by the tests (no API key).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Make sure no Gemini key is ever available to the tests.
+      GEMINI_API_KEY: ""
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Set up Bun (dependencies are locked in bun.lock)
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache Bun downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile
+
+      - name: Lint (TypeScript type check)
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Automated regression tests
+        run: npm test
