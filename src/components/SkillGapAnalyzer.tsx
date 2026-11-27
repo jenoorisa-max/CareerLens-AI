@@ -23,6 +23,8 @@ interface SkillGapAnalyzerProps {
   selectedCareer: CareerRecommendation | null;
   analysis: SkillGapAnalysis | null;
   isLoading: boolean;
+  /** The last request for the selected career failed (shows a retry hint). */
+  hasFailed?: boolean;
   onSelectCareer: (career: CareerRecommendation, forceRefresh?: boolean) => void;
   onGoToRoadmap: () => void;
   onGoToFinder: () => void;
@@ -34,6 +36,7 @@ export default function SkillGapAnalyzer({
   selectedCareer,
   analysis,
   isLoading,
+  hasFailed = false,
   onSelectCareer,
   onGoToRoadmap,
   onGoToFinder,
@@ -130,6 +133,19 @@ export default function SkillGapAnalyzer({
           <p className="mt-1 text-sm text-slate-500">
             Mapping your existing strengths, missing competencies, and top
             priorities.
+          </p>
+        </div>
+      )}
+
+      {/* Failed State: stays until the user deliberately retries */}
+      {!isLoading && !analysis && hasFailed && (
+        <div className="rounded-2xl border border-[#E8E1F8] bg-white p-10 text-center">
+          <AlertCircle className="h-7 w-7 text-[#5B21B6] mx-auto" />
+          <h3 className="mt-4 text-base font-bold text-[#18132A]">
+            This analysis didn&apos;t complete
+          </h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Use Re-analyze above to try again for {selectedCareer?.title}.
           </p>
         </div>
       )}

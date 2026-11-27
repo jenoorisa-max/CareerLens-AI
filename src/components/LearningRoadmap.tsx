@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Printer,
   Lightbulb,
+  AlertCircle,
 } from "lucide-react";
 import type {
   CareerRecommendation,
@@ -26,6 +27,8 @@ interface LearningRoadmapProps {
   selectedCareer: CareerRecommendation | null;
   roadmap: LearningRoadmapData | null;
   isLoading: boolean;
+  /** The last request for the selected career failed (shows a retry hint). */
+  hasFailed?: boolean;
   onSelectCareerForRoadmap: (
     career: CareerRecommendation,
     forceRefresh?: boolean
@@ -39,6 +42,7 @@ export default function LearningRoadmap({
   selectedCareer,
   roadmap,
   isLoading,
+  hasFailed = false,
   onSelectCareerForRoadmap,
   onGoToFinder,
 }: LearningRoadmapProps) {
@@ -163,6 +167,19 @@ export default function LearningRoadmap({
           <p className="mt-1 text-sm text-slate-500">
             Organizing learning stages, tools, beginner resources, and hands-on
             projects.
+          </p>
+        </div>
+      )}
+
+      {/* Failed State: stays until the user deliberately retries */}
+      {!isLoading && !roadmap && hasFailed && (
+        <div className="rounded-2xl border border-[#E8E1F8] bg-white p-10 text-center">
+          <AlertCircle className="h-7 w-7 text-[#5B21B6] mx-auto" />
+          <h3 className="mt-4 text-base font-bold text-[#18132A]">
+            This roadmap didn&apos;t complete
+          </h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Use Regenerate above to try again for {selectedCareer?.title}.
           </p>
         </div>
       )}

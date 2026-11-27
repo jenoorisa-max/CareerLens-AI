@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useReducer, useRef, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import SidebarNav from "./components/SidebarNav";
 import CareerFinder from "./components/CareerFinder";
@@ -12,7 +12,15 @@ import type {
   SkillGapAnalysis,
   StudentProfile,
 } from "./types/career";
-import { postJSON } from "./lib/api";
+import {
+  createRequestCoordinator,
+  type RequestCoordinator,
+  type RequestOptions,
+} from "./lib/requests";
+
+const DELIBERATE: RequestOptions = { trigger: "deliberate" };
+const DELIBERATE_REFRESH: RequestOptions = { trigger: "deliberate", forceRefresh: true };
+const NAVIGATION: RequestOptions = { trigger: "navigation" };
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("finder");
@@ -29,149 +37,102 @@ export default function App() {
     Record<string, LearningRoadmapData>
   >({});
 
-  const [loadingCareers, setLoadingCareers] = useState(false);
-  const [loadingSkillGap, setLoadingSkillGap] = useState(false);
-  const [loadingRoadmap, setLoadingRoadmap] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Latest values for the request coordinator: async request flows read these
+  // refs instead of possibly stale render closures.
+  const profileRef = useRef<StudentProfile | null>(null);
+  const skillGapsRef = useRef<Record<string, SkillGapAnalysis>>({});
+  const roadmapsRef = useRef<Record<string, LearningRoadmapData>>({});
+  const [, rerender] = useReducer((n: number) => n + 1, 0);
+
+  const updateProfile = (next: StudentProfile | null) => {
+    profileRef.current = next;
+    setProfile(next);
+  };
+  const replaceSkillGaps = (next: Record<string, SkillGapAnalysis>) => {
+    skillGapsRef.current = next;
+    setSkillGapsByCareer(next);
+  };
+  const replaceRoadmaps = (next: Record<string, LearningRoadmapData>) => {
+    roadmapsRef.current = next;
+    setRoadmapsByCareer(next);
+  };
+
+  // F1–F3: one coordinator for the whole app (see src/lib/requests.ts).
+  const coordinatorRef = useRef<RequestCoordinator | null>(null);
+  if (!coordinatorRef.current) {
+    coordinatorRef.current = createRequestCoordinator({
+      getProfile: () => profileRef.current,
+      getSkillGap: (title) => skillGapsRef.current[title],
+      getRoadmap: (title) => roadmapsRef.current[title],
+      setCareers: (data) => {
+        setCareerResults(data);
+        setSelectedCareer(data.careers[0] ?? null);
+        replaceSkillGaps({});
+        replaceRoadmaps({});
+      },
+      setSkillGap: (title, data) =>
+        replaceSkillGaps({ ...skillGapsRef.current, [title]: data }),
+      setRoadmap: (title, data) =>
+        replaceRoadmaps({ ...roadmapsRef.current, [title]: data }),
+      setError: (message) => setErrorMessage(message),
+      onRequestsChanged: () => rerender(),
+    });
+  }
+  const requests = coordinatorRef.current;
 
   const handleFindCareers = async (newProfile: StudentProfile) => {
     setErrorMessage(null);
-    setLoadingCareers(true);
-    setProfile(newProfile);
-
-    try {
-      const result = await postJSON<CareerFinderResponse>(
-        "/api/careers",
-        newProfile,
-        "Failed to generate career recommendations."
-      );
-
-      if (!result.ok) {
-        setErrorMessage(result.message);
-        return;
-      }
-
-      setCareerResults(result.data);
-      setSelectedCareer(result.data.careers[0] ?? null);
-      setSkillGapsByCareer({});
-      setRoadmapsByCareer({});
-    } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : "Something went wrong."
-      );
-    } finally {
-      setLoadingCareers(false);
-    }
+    updateProfile(newProfile);
+    await requests.findCareers(newProfile);
   };
 
-  const handleAnalyzeSkillGap = async (
+  const handleAnalyzeSkillGap = (
     career: CareerRecommendation,
-    forceRefresh = false
+    options: RequestOptions
   ) => {
-    if (!profile) return;
+    if (!profileRef.current) return;
 
     setErrorMessage(null);
     setSelectedCareer(career);
     setActiveTab("skill-gap");
-
-    if (!forceRefresh && skillGapsByCareer[career.title]) {
-      return;
-    }
-
-    setLoadingSkillGap(true);
-    try {
-      const result = await postJSON<SkillGapAnalysis>(
-        "/api/skill-gap",
-        { profile, career },
-        "Failed to analyze skill gap for this career."
-      );
-
-      if (!result.ok) {
-        setErrorMessage(result.message);
-        return;
-      }
-
-      setSkillGapsByCareer((prev) => ({
-        ...prev,
-        [career.title]: result.data,
-      }));
-    } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : "Failed to analyze skill gap."
-      );
-    } finally {
-      setLoadingSkillGap(false);
-    }
+    void requests.analyzeSkillGap(career, options);
   };
 
-  const handleGenerateRoadmap = async (
+  const handleGenerateRoadmap = (
     career: CareerRecommendation,
-    forceRefresh = false
+    options: RequestOptions
   ) => {
-    if (!profile) return;
+    if (!profileRef.current) return;
 
     setErrorMessage(null);
     setSelectedCareer(career);
     setActiveTab("roadmap");
-
-    if (!forceRefresh && roadmapsByCareer[career.title]) {
-      return;
-    }
-
-    setLoadingRoadmap(true);
-    try {
-      const existingGap = skillGapsByCareer[career.title] ?? null;
-      const result = await postJSON<LearningRoadmapData>(
-        "/api/roadmap",
-        { profile, career, skillGap: existingGap },
-        "Failed to generate your learning roadmap."
-      );
-
-      if (!result.ok) {
-        setErrorMessage(result.message);
-        return;
-      }
-
-      setRoadmapsByCareer((prev) => ({
-        ...prev,
-        [career.title]: result.data,
-      }));
-    } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : "Failed to generate roadmap."
-      );
-    } finally {
-      setLoadingRoadmap(false);
-    }
+    void requests.generateRoadmap(career, options);
   };
 
+  // Tab switching is navigation: it auto-loads only results that were never
+  // attempted, and never re-sends a request that just failed (F3).
   const handleTabChange = (tab: ActiveTab) => {
     setErrorMessage(null);
     setActiveTab(tab);
 
-    if (
-      tab === "skill-gap" &&
-      selectedCareer &&
-      !skillGapsByCareer[selectedCareer.title] &&
-      !loadingSkillGap
-    ) {
-      void handleAnalyzeSkillGap(selectedCareer);
-    } else if (
-      tab === "roadmap" &&
-      selectedCareer &&
-      !roadmapsByCareer[selectedCareer.title] &&
-      !loadingRoadmap
-    ) {
-      void handleGenerateRoadmap(selectedCareer);
+    if (!selectedCareer) return;
+    if (tab === "skill-gap") {
+      void requests.analyzeSkillGap(selectedCareer, NAVIGATION);
+    } else if (tab === "roadmap") {
+      void requests.generateRoadmap(selectedCareer, NAVIGATION);
     }
   };
 
   const handleReset = () => {
-    setProfile(null);
+    requests.reset();
+    updateProfile(null);
     setCareerResults(null);
     setSelectedCareer(null);
-    setSkillGapsByCareer({});
-    setRoadmapsByCareer({});
+    replaceSkillGaps({});
+    replaceRoadmaps({});
     setErrorMessage(null);
     setActiveTab("finder");
   };
@@ -182,6 +143,22 @@ export default function App() {
   const currentRoadmap = selectedCareer
     ? roadmapsByCareer[selectedCareer.title] ?? null
     : null;
+
+  // Loading/failed state is per career, so one career finishing cannot hide
+  // another career's spinner.
+  const loadingCareers = requests.isPending("careers");
+  const loadingSkillGap = selectedCareer
+    ? requests.isPending("skill-gap", selectedCareer.title)
+    : false;
+  const loadingRoadmap = selectedCareer
+    ? requests.isPending("roadmap", selectedCareer.title)
+    : false;
+  const skillGapFailed = selectedCareer
+    ? requests.hasFailed("skill-gap", selectedCareer.title)
+    : false;
+  const roadmapFailed = selectedCareer
+    ? requests.hasFailed("roadmap", selectedCareer.title)
+    : false;
 
   const sectionLabel =
     activeTab === "finder"
@@ -256,10 +233,10 @@ export default function App() {
               isLoading={loadingCareers}
               onSubmitProfile={handleFindCareers}
               onSelectForSkillGap={(career) =>
-                void handleAnalyzeSkillGap(career)
+                handleAnalyzeSkillGap(career, DELIBERATE)
               }
               onSelectForRoadmap={(career) =>
-                void handleGenerateRoadmap(career)
+                handleGenerateRoadmap(career, DELIBERATE)
               }
             />
           )}
@@ -271,12 +248,16 @@ export default function App() {
               selectedCareer={selectedCareer}
               analysis={currentSkillGap}
               isLoading={loadingSkillGap}
+              hasFailed={skillGapFailed}
               onSelectCareer={(career, refresh) =>
-                void handleAnalyzeSkillGap(career, refresh)
+                handleAnalyzeSkillGap(
+                  career,
+                  refresh ? DELIBERATE_REFRESH : NAVIGATION
+                )
               }
               onGoToRoadmap={() => {
                 if (selectedCareer) {
-                  void handleGenerateRoadmap(selectedCareer);
+                  handleGenerateRoadmap(selectedCareer, DELIBERATE);
                 }
               }}
               onGoToFinder={() => setActiveTab("finder")}
@@ -290,8 +271,12 @@ export default function App() {
               selectedCareer={selectedCareer}
               roadmap={currentRoadmap}
               isLoading={loadingRoadmap}
+              hasFailed={roadmapFailed}
               onSelectCareerForRoadmap={(career, refresh) =>
-                void handleGenerateRoadmap(career, refresh)
+                handleGenerateRoadmap(
+                  career,
+                  refresh ? DELIBERATE_REFRESH : NAVIGATION
+                )
               }
               onGoToFinder={() => setActiveTab("finder")}
             />
