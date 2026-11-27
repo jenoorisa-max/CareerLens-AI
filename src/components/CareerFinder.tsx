@@ -17,6 +17,8 @@ import type {
   StudentProfile,
 } from "../types/career";
 import { clampPercent, padNumber } from "../lib/format";
+import { mergeTags, type TagKind } from "../lib/tags";
+import { PROFILE_LIMITS, validateProfile } from "../shared/profile";
 
 interface CareerFinderProps {
   initialProfile: StudentProfile | null;
@@ -92,28 +94,24 @@ export default function CareerFinder({
     initialProfile?.careerGoals ?? ""
   );
   const [validationError, setValidationError] = useState<string | null>(null);
+  // Tag-limit errors are shown under the field they belong to.
+  const [tagError, setTagError] = useState<{ kind: TagKind; message: string } | null>(null);
 
+  /** Returns the new list, or null if the addition was rejected (input is kept). */
   const addTags = (
     raw: string,
     current: string[],
-    setter: React.Dispatch<React.SetStateAction<string[]>>
-  ): string[] => {
-    const items = raw
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-    if (items.length === 0) return current;
-
-    const existingLower = new Set(current.map((s) => s.toLowerCase()));
-    const next = [...current];
-    for (const item of items) {
-      if (!existingLower.has(item.toLowerCase())) {
-        next.push(item);
-        existingLower.add(item.toLowerCase());
-      }
+    setter: React.Dispatch<React.SetStateAction<string[]>>,
+    kind: TagKind
+  ): string[] | null => {
+    const result = mergeTags(raw, current, kind);
+    if (!result.ok) {
+      setTagError({ kind, message: result.error });
+      return null;
     }
-    setter(next);
-    return next;
+    if (tagError?.kind === kind) setTagError(null);
+    if (result.tags !== current) setter(result.tags);
+    return result.tags;
   };
 
   const removeTag = (
@@ -122,6 +120,7 @@ export default function CareerFinder({
     setter: React.Dispatch<React.SetStateAction<string[]>>
   ) => {
     setter(current.filter((_, idx) => idx !== index));
+    setTagError(null);
   };
 
   const handleFillSample = () => {
@@ -152,15 +151,23 @@ export default function CareerFinder({
     e.preventDefault();
     setValidationError(null);
 
-    const finalSkills = skillInput.trim()
-      ? addTags(skillInput, skills, setSkills)
-      : skills;
-    if (skillInput.trim()) setSkillInput("");
+    // Pending text in a tag input is added first; if it breaks a limit the
+    // submit stops and the text stays in the input (never silently dropped).
+    let finalSkills = skills;
+    if (skillInput.trim()) {
+      const merged = addTags(skillInput, skills, setSkills, "skill");
+      if (!merged) return;
+      finalSkills = merged;
+      setSkillInput("");
+    }
 
-    const finalInterests = interestInput.trim()
-      ? addTags(interestInput, interests, setInterests)
-      : interests;
-    if (interestInput.trim()) setInterestInput("");
+    let finalInterests = interests;
+    if (interestInput.trim()) {
+      const merged = addTags(interestInput, interests, setInterests, "interest");
+      if (!merged) return;
+      finalInterests = merged;
+      setInterestInput("");
+    }
 
     if (!name.trim()) {
       setValidationError("Please enter your name.");
@@ -183,14 +190,23 @@ export default function CareerFinder({
       return;
     }
 
-    await onSubmitProfile({
+    const submission: StudentProfile = {
       name: name.trim(),
       educationLevel,
       fieldOfStudy: fieldOfStudy.trim(),
       skills: finalSkills,
       interests: finalInterests,
       careerGoals: careerGoals.trim(),
-    });
+    };
+    // Same rules and messages as the server, so an over-limit value (e.g. one
+    // restored from an earlier session) is caught here instead of by a 400.
+    const limits = validateProfile(submission);
+    if (!limits.ok) {
+      setValidationError(limits.error);
+      return;
+    }
+
+    await onSubmitProfile(submission);
   };
 
   return (
@@ -251,6 +267,7 @@ export default function CareerFinder({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                maxLength={PROFILE_LIMITS.name}
                 placeholder="e.g., Alex Morgan"
                 className="w-full rounded-xl border border-[#E2DAF5] bg-[#FAF8FF]/60 px-4 py-2.5 text-sm text-[#18132A] placeholder:text-slate-400 focus:border-[#5B21B6] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B21B6]/20 transition"
               />
@@ -289,6 +306,7 @@ export default function CareerFinder({
                 type="text"
                 value={fieldOfStudy}
                 onChange={(e) => setFieldOfStudy(e.target.value)}
+                maxLength={PROFILE_LIMITS.fieldOfStudy}
                 placeholder="e.g., Computer Science, Economics, Biology"
                 className="w-full rounded-xl border border-[#E2DAF5] bg-[#FAF8FF]/60 px-4 py-2.5 text-sm text-[#18132A] placeholder:text-slate-400 focus:border-[#5B21B6] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B21B6]/20 transition"
               />
@@ -310,22 +328,25 @@ export default function CareerFinder({
                   id="skills-input"
                   type="text"
                   value={skillInput}
-                  onChange={(e) => setSkillInput(e.target.value)}
+                  onChange={(e) => {
+                    setSkillInput(e.target.value);
+                    if (tagError?.kind === "skill") setTagError(null);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      addTags(skillInput, skills, setSkills);
-                      setSkillInput("");
+                      if (addTags(skillInput, skills, setSkills, "skill")) setSkillInput("");
                     }
                   }}
+                  aria-invalid={tagError?.kind === "skill"}
+                  aria-describedby={tagError?.kind === "skill" ? "skills-error" : undefined}
                   placeholder="Type a skill & press Enter"
                   className="flex-1 min-w-0 rounded-xl border border-[#E2DAF5] bg-[#FAF8FF]/60 px-4 py-2.5 text-sm text-[#18132A] placeholder:text-slate-400 focus:border-[#5B21B6] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B21B6]/20 transition"
                 />
                 <button
                   type="button"
                   onClick={() => {
-                    addTags(skillInput, skills, setSkills);
-                    setSkillInput("");
+                    if (addTags(skillInput, skills, setSkills, "skill")) setSkillInput("");
                   }}
                   className="inline-flex items-center gap-1 rounded-xl bg-[#F3EEFF] px-4 py-2.5 text-xs font-semibold text-[#4C1D95] hover:bg-[#E7DDFC] transition-colors whitespace-nowrap shrink-0"
                 >
@@ -333,6 +354,12 @@ export default function CareerFinder({
                   Add
                 </button>
               </div>
+
+              {tagError?.kind === "skill" && (
+                <p id="skills-error" role="alert" className="text-xs font-medium text-red-700">
+                  {tagError.message}
+                </p>
+              )}
 
               {skills.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -361,7 +388,7 @@ export default function CareerFinder({
                     <button
                       key={q}
                       type="button"
-                      onClick={() => addTags(q, skills, setSkills)}
+                      onClick={() => addTags(q, skills, setSkills, "skill")}
                       className="rounded-lg border border-[#E8E1F8] bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-[#5B21B6] hover:text-[#4C1D95] transition-colors whitespace-nowrap"
                     >
                       + {q}
@@ -383,22 +410,25 @@ export default function CareerFinder({
                   id="interests-input"
                   type="text"
                   value={interestInput}
-                  onChange={(e) => setInterestInput(e.target.value)}
+                  onChange={(e) => {
+                    setInterestInput(e.target.value);
+                    if (tagError?.kind === "interest") setTagError(null);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      addTags(interestInput, interests, setInterests);
-                      setInterestInput("");
+                      if (addTags(interestInput, interests, setInterests, "interest")) setInterestInput("");
                     }
                   }}
+                  aria-invalid={tagError?.kind === "interest"}
+                  aria-describedby={tagError?.kind === "interest" ? "interests-error" : undefined}
                   placeholder="Type an interest & press Enter"
                   className="flex-1 min-w-0 rounded-xl border border-[#E2DAF5] bg-[#FAF8FF]/60 px-4 py-2.5 text-sm text-[#18132A] placeholder:text-slate-400 focus:border-[#5B21B6] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B21B6]/20 transition"
                 />
                 <button
                   type="button"
                   onClick={() => {
-                    addTags(interestInput, interests, setInterests);
-                    setInterestInput("");
+                    if (addTags(interestInput, interests, setInterests, "interest")) setInterestInput("");
                   }}
                   className="inline-flex items-center gap-1 rounded-xl bg-[#F3EEFF] px-4 py-2.5 text-xs font-semibold text-[#4C1D95] hover:bg-[#E7DDFC] transition-colors whitespace-nowrap shrink-0"
                 >
@@ -406,6 +436,12 @@ export default function CareerFinder({
                   Add
                 </button>
               </div>
+
+              {tagError?.kind === "interest" && (
+                <p id="interests-error" role="alert" className="text-xs font-medium text-red-700">
+                  {tagError.message}
+                </p>
+              )}
 
               {interests.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -435,7 +471,7 @@ export default function CareerFinder({
                     <button
                       key={q}
                       type="button"
-                      onClick={() => addTags(q, interests, setInterests)}
+                      onClick={() => addTags(q, interests, setInterests, "interest")}
                       className="rounded-lg border border-[#E8E1F8] bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-[#5B21B6] hover:text-[#4C1D95] transition-colors whitespace-nowrap"
                     >
                       + {q}
@@ -458,6 +494,7 @@ export default function CareerFinder({
               rows={3}
               value={careerGoals}
               onChange={(e) => setCareerGoals(e.target.value)}
+              maxLength={PROFILE_LIMITS.careerGoals}
               placeholder="What kind of work environment, impact, or role are you hoping to build toward?"
               className="w-full rounded-xl border border-[#E2DAF5] bg-[#FAF8FF]/60 px-4 py-3 text-sm text-[#18132A] placeholder:text-slate-400 focus:border-[#5B21B6] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B21B6]/20 transition"
             />

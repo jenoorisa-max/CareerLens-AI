@@ -78,5 +78,7 @@ async function runCheck(name: string, script: string, mockEnv: Record<string, st
 console.log(`Browser: ${browserPath}`);
 const ok1 = await runCheck("D3 cooldown (skill gap mocked as 503)", "tests/browser/cooldown.browser.mts", {});
 const ok2 = await runCheck("D4 session persistence (all mocked as 200)", "tests/browser/session.browser.mts", { MOCK_SKILLGAP: "ok" });
-console.log(`\nBROWSER CHECKS: ${ok1 && ok2 ? "all passed" : "FAILED"}`);
-process.exit(ok1 && ok2 ? 0 : 1);
+const ok3 = await runCheck("Career Finder input limits", "tests/browser/form-limits.browser.mts", { MOCK_SKILLGAP: "ok" });
+const allOk = ok1 && ok2 && ok3;
+console.log(`\nBROWSER CHECKS: ${allOk ? "all passed" : "FAILED"}`);
+process.exit(allOk ? 0 : 1);

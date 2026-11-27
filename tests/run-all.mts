@@ -17,6 +17,7 @@ const SUITES = [
   "tests/frontend/cooldown.test.mts",            // D3: 15s cooldown after 503/429
   "tests/frontend/session.test.mts",             // D4: session persistence, validator move
   "tests/frontend/shared-profile.test.mts",      // D4 follow-up: shared profile validation, stage numbers
+  "tests/frontend/form-limits.test.mts",         // Career Finder input limits match the server
 ];
 
 const env = { ...process.env };
