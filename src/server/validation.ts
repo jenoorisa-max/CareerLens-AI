@@ -4,6 +4,7 @@
 // Two strategies, on purpose:
 // - The student profile is typed by the user, so it is VALIDATED: bad input
 //   gets a 400 with a friendly message (same messages the app already shows).
+//   That validator lives in src/shared/profile.ts (also used by the browser).
 // - The career and skill-gap objects are AI output that the browser sends
 //   back, so they are SANITIZED instead: coerced to the expected shape and
 //   trimmed to safe sizes, never rejected (except a career without a title,
@@ -13,21 +14,7 @@ import type {
   CareerRecommendation,
   MissingSkillItem,
   SkillGapAnalysis,
-  StudentProfile,
 } from "../types/career.ts";
-
-export const PROFILE_LIMITS = {
-  name: 100,
-  educationLevel: 100,
-  fieldOfStudy: 150,
-  maxTags: 30,
-  tagLength: 80,
-  careerGoals: 2000,
-} as const;
-
-export type ValidationResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: string };
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -70,62 +57,6 @@ function clampInteger(value: unknown, min: number, max: number, fallback: number
   const num = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(num)) return fallback;
   return Math.min(max, Math.max(min, Math.round(num)));
-}
-
-// ---------------------------------------------------------------------------
-// Student profile (user input): validate
-// ---------------------------------------------------------------------------
-
-export function validateProfile(input: unknown): ValidationResult<StudentProfile> {
-  const body = asRecord(input);
-  const L = PROFILE_LIMITS;
-
-  const name = trimmedString(body.name);
-  if (!name) return { ok: false, error: "Please enter your name." };
-  if (name.length > L.name) {
-    return { ok: false, error: `Name must be ${L.name} characters or fewer.` };
-  }
-
-  const educationLevel = trimmedString(body.educationLevel);
-  if (!educationLevel) return { ok: false, error: "Please select your education level." };
-  if (educationLevel.length > L.educationLevel) {
-    return { ok: false, error: `Education level must be ${L.educationLevel} characters or fewer.` };
-  }
-
-  const fieldOfStudy = trimmedString(body.fieldOfStudy);
-  if (!fieldOfStudy) return { ok: false, error: "Please enter your field of study." };
-  if (fieldOfStudy.length > L.fieldOfStudy) {
-    return { ok: false, error: `Field of study must be ${L.fieldOfStudy} characters or fewer.` };
-  }
-
-  const skills = stringList(body.skills);
-  if (skills.length === 0) return { ok: false, error: "Please add at least one current skill." };
-  if (skills.length > L.maxTags) {
-    return { ok: false, error: `Please add no more than ${L.maxTags} skills.` };
-  }
-  if (skills.some((s) => s.length > L.tagLength)) {
-    return { ok: false, error: `Each skill must be ${L.tagLength} characters or fewer.` };
-  }
-
-  const interests = stringList(body.interests);
-  if (interests.length === 0) return { ok: false, error: "Please add at least one interest." };
-  if (interests.length > L.maxTags) {
-    return { ok: false, error: `Please add no more than ${L.maxTags} interests.` };
-  }
-  if (interests.some((i) => i.length > L.tagLength)) {
-    return { ok: false, error: `Each interest must be ${L.tagLength} characters or fewer.` };
-  }
-
-  const careerGoals = trimmedString(body.careerGoals);
-  if (!careerGoals) return { ok: false, error: "Please describe your career goals." };
-  if (careerGoals.length > L.careerGoals) {
-    return { ok: false, error: `Career goals must be ${L.careerGoals} characters or fewer.` };
-  }
-
-  return {
-    ok: true,
-    value: { name, educationLevel, fieldOfStudy, skills, interests, careerGoals },
-  };
 }
 
 // ---------------------------------------------------------------------------

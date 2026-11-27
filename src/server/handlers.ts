@@ -14,8 +14,8 @@ import {
   asRecord,
   sanitizeCareer,
   sanitizeSkillGap,
-  validateProfile,
 } from "./validation.ts";
+import { validateProfile } from "../shared/profile.ts";
 import {
   checkCareersShape,
   checkRoadmapShape,

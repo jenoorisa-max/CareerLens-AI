@@ -8,7 +8,7 @@ import type {
   SkillGapAnalysis,
   StudentProfile,
 } from "../types/career";
-import { validateProfile } from "../server/validation";
+import { validateProfile } from "../shared/profile";
 import {
   checkCareersShape,
   checkRoadmapShape,
@@ -32,6 +32,14 @@ export interface PersistedSession {
   roadmapsByCareer: Record<string, LearningRoadmapData>;
   /** Keys are "<career title>::<stage number>"; only completed stages are stored. */
   completedStages: Record<string, true>;
+}
+
+/**
+ * Canonical positive integer as written by the app ("1", "12"): rejects "0",
+ * leading zeros ("01"), negatives, decimals, exponents and unsafe integers.
+ */
+function isStageNumber(text: string): boolean {
+  return /^[1-9]\d*$/.test(text) && Number.isSafeInteger(Number(text));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -81,7 +89,7 @@ export function parseSession(raw: unknown, now: number = Date.now()): PersistedS
   if (isRecord(raw.completedStages)) {
     for (const [key, done] of Object.entries(raw.completedStages)) {
       const sep = key.lastIndexOf("::");
-      if (done === true && sep > 0 && titles.has(key.slice(0, sep)) && /^\d+$/.test(key.slice(sep + 2))) {
+      if (done === true && sep > 0 && titles.has(key.slice(0, sep)) && isStageNumber(key.slice(sep + 2))) {
         completedStages[key] = true;
       }
     }
