@@ -18,6 +18,7 @@ import type {
   LearningRoadmapData,
   StudentProfile,
 } from "../types/career";
+import { padNumber } from "../lib/format";
 
 interface LearningRoadmapProps {
   profile: StudentProfile | null;
@@ -131,11 +132,11 @@ export default function LearningRoadmap({
         </div>
 
         <div className="mt-5 inline-flex flex-wrap gap-1.5 p-1.5 rounded-xl bg-[#FAF8FF] border border-[#E8E1F8]">
-          {careers.map((career) => {
+          {careers.map((career, index) => {
             const isSelected = selectedCareer?.title === career.title;
             return (
               <button
-                key={career.id || career.title}
+                key={`${index}-${career.id || career.title}`}
                 type="button"
                 disabled={isLoading}
                 onClick={() => onSelectCareerForRoadmap(career)}
@@ -208,13 +209,13 @@ export default function LearningRoadmap({
 
           {/* Stages */}
           <div className="space-y-6">
-            {roadmap.stages.map((stage) => {
+            {roadmap.stages.map((stage, stageIndex) => {
               const stageKey = `${roadmap.careerTitle}::${stage.stageNumber}`;
               const isDone = Boolean(completedStages[stageKey]);
 
               return (
                 <article
-                  key={stage.stageNumber}
+                  key={`${stageIndex}-${stage.stageNumber}`}
                   className={`rounded-2xl border bg-white p-6 transition-colors ${
                     isDone ? "border-[#5B21B6]/50" : "border-[#E8E1F8]"
                   }`}
@@ -223,7 +224,7 @@ export default function LearningRoadmap({
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-[#EFEAF9]">
                     <div className="flex items-start gap-4">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#4C1D95] text-sm font-mono tabular-nums font-bold text-white">
-                        0{stage.stageNumber}
+                        {padNumber(stage.stageNumber)}
                       </div>
                       <div>
                         <div className="flex flex-wrap items-baseline gap-2.5">
@@ -274,9 +275,9 @@ export default function LearningRoadmap({
                           Topics to Master
                         </h3>
                         <ul className="space-y-2">
-                          {stage.topics.map((topic) => (
+                          {stage.topics.map((topic, topicIndex) => (
                             <li
-                              key={topic}
+                              key={`${topicIndex}-${topic}`}
                               className="flex items-start gap-2 text-sm text-slate-700 leading-snug"
                             >
                               <span className="mt-2 h-1.5 w-1.5 rounded-full bg-[#5B21B6] shrink-0" />
@@ -304,9 +305,9 @@ export default function LearningRoadmap({
                         <span>Beginner Resources</span>
                       </h3>
                       <div className="divide-y divide-[#EFEAF9]">
-                        {stage.resources.map((res) => (
+                        {stage.resources.map((res, resIndex) => (
                           <div
-                            key={res.title}
+                            key={`${resIndex}-${res.title}`}
                             className="py-3 first:pt-0 last:pb-0"
                           >
                             <div className="flex items-baseline justify-between gap-2">
@@ -343,9 +344,9 @@ export default function LearningRoadmap({
                             Deliverables
                           </div>
                           <ul className="space-y-1.5">
-                            {stage.project.deliverables.map((del) => (
+                            {stage.project.deliverables.map((del, delIndex) => (
                               <li
-                                key={del}
+                                key={`${delIndex}-${del}`}
                                 className="flex items-start gap-2 text-xs text-slate-700 leading-snug"
                               >
                                 <CheckCircle2 className="h-3.5 w-3.5 text-[#5B21B6] shrink-0 mt-0.5" />

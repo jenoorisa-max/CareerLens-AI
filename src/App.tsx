@@ -12,6 +12,7 @@ import type {
   SkillGapAnalysis,
   StudentProfile,
 } from "./types/career";
+import { postJSON } from "./lib/api";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("finder");
@@ -39,25 +40,19 @@ export default function App() {
     setProfile(newProfile);
 
     try {
-      const response = await fetch("/api/careers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newProfile),
-      });
+      const result = await postJSON<CareerFinderResponse>(
+        "/api/careers",
+        newProfile,
+        "Failed to generate career recommendations."
+      );
 
-      const payload = (await response.json()) as {
-        data?: CareerFinderResponse;
-        error?: string;
-      };
-
-      if (!response.ok || !payload.data) {
-        throw new Error(
-          payload.error || "Failed to generate career recommendations."
-        );
+      if (!result.ok) {
+        setErrorMessage(result.message);
+        return;
       }
 
-      setCareerResults(payload.data);
-      setSelectedCareer(payload.data.careers[0] ?? null);
+      setCareerResults(result.data);
+      setSelectedCareer(result.data.careers[0] ?? null);
       setSkillGapsByCareer({});
       setRoadmapsByCareer({});
     } catch (err) {
@@ -85,26 +80,20 @@ export default function App() {
 
     setLoadingSkillGap(true);
     try {
-      const response = await fetch("/api/skill-gap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profile, career }),
-      });
+      const result = await postJSON<SkillGapAnalysis>(
+        "/api/skill-gap",
+        { profile, career },
+        "Failed to analyze skill gap for this career."
+      );
 
-      const payload = (await response.json()) as {
-        data?: SkillGapAnalysis;
-        error?: string;
-      };
-
-      if (!response.ok || !payload.data) {
-        throw new Error(
-          payload.error || "Failed to analyze skill gap for this career."
-        );
+      if (!result.ok) {
+        setErrorMessage(result.message);
+        return;
       }
 
       setSkillGapsByCareer((prev) => ({
         ...prev,
-        [career.title]: payload.data!,
+        [career.title]: result.data,
       }));
     } catch (err) {
       setErrorMessage(
@@ -132,30 +121,20 @@ export default function App() {
     setLoadingRoadmap(true);
     try {
       const existingGap = skillGapsByCareer[career.title] ?? null;
-      const response = await fetch("/api/roadmap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          profile,
-          career,
-          skillGap: existingGap,
-        }),
-      });
+      const result = await postJSON<LearningRoadmapData>(
+        "/api/roadmap",
+        { profile, career, skillGap: existingGap },
+        "Failed to generate your learning roadmap."
+      );
 
-      const payload = (await response.json()) as {
-        data?: LearningRoadmapData;
-        error?: string;
-      };
-
-      if (!response.ok || !payload.data) {
-        throw new Error(
-          payload.error || "Failed to generate your learning roadmap."
-        );
+      if (!result.ok) {
+        setErrorMessage(result.message);
+        return;
       }
 
       setRoadmapsByCareer((prev) => ({
         ...prev,
-        [career.title]: payload.data!,
+        [career.title]: result.data,
       }));
     } catch (err) {
       setErrorMessage(

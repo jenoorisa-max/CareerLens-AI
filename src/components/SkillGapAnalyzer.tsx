@@ -15,6 +15,7 @@ import type {
   SkillGapAnalysis,
   StudentProfile,
 } from "../types/career";
+import { clampPercent, padNumber } from "../lib/format";
 
 interface SkillGapAnalyzerProps {
   profile: StudentProfile | null;
@@ -98,11 +99,11 @@ export default function SkillGapAnalyzer({
 
         {/* Career Tabs */}
         <div className="mt-5 inline-flex flex-wrap gap-1.5 p-1.5 rounded-xl bg-[#FAF8FF] border border-[#E8E1F8]">
-          {careers.map((career) => {
+          {careers.map((career, index) => {
             const isSelected = selectedCareer?.title === career.title;
             return (
               <button
-                key={career.id || career.title}
+                key={`${index}-${career.id || career.title}`}
                 type="button"
                 disabled={isLoading}
                 onClick={() => onSelectCareer(career)}
@@ -151,7 +152,7 @@ export default function SkillGapAnalyzer({
 
               <div className="shrink-0 min-w-[200px] md:pl-6 md:border-l md:border-[#E8E1F8]">
                 <div className="text-3xl font-extrabold font-mono tabular-nums text-[#4C1D95]">
-                  {analysis.readinessScore}%
+                  {clampPercent(analysis.readinessScore)}%
                 </div>
                 <div className="text-xs font-semibold text-slate-500 mt-0.5">
                   Current Role Readiness
@@ -159,7 +160,7 @@ export default function SkillGapAnalyzer({
                 <div className="mt-3 h-2 w-full rounded-full bg-[#E8E1F8] overflow-hidden">
                   <div
                     className="h-full rounded-full bg-[#5B21B6] transition-all duration-300"
-                    style={{ width: `${analysis.readinessScore}%` }}
+                    style={{ width: `${clampPercent(analysis.readinessScore)}%` }}
                   />
                 </div>
               </div>
@@ -184,8 +185,8 @@ export default function SkillGapAnalyzer({
 
               <div className="divide-y divide-[#EFEAF9]">
                 {analysis.skillsYouHave.length > 0 ? (
-                  analysis.skillsYouHave.map((item) => (
-                    <div key={item.skill} className="py-4 first:pt-4 last:pb-1">
+                  analysis.skillsYouHave.map((item, index) => (
+                    <div key={`${index}-${item.skill}`} className="py-4 first:pt-4 last:pb-1">
                       <div className="flex items-center gap-2 text-sm font-bold text-[#18132A]">
                         <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
                         <span>{item.skill}</span>
@@ -219,8 +220,8 @@ export default function SkillGapAnalyzer({
               </div>
 
               <div className="divide-y divide-[#EFEAF9]">
-                {analysis.missingSkills.map((item) => (
-                  <div key={item.skill} className="py-4 first:pt-4 last:pb-1">
+                {analysis.missingSkills.map((item, index) => (
+                  <div key={`${index}-${item.skill}`} className="py-4 first:pt-4 last:pb-1">
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="text-sm font-bold text-[#18132A]">
                         {item.skill}
@@ -258,14 +259,14 @@ export default function SkillGapAnalyzer({
             </div>
 
             <div className="divide-y divide-[#EFEAF9]">
-              {analysis.priorities.map((step) => (
+              {analysis.priorities.map((step, index) => (
                 <div
-                  key={`${step.rank}-${step.skill}`}
+                  key={`${index}-${step.skill}`}
                   className="py-5 grid grid-cols-1 md:grid-cols-12 gap-4 items-start"
                 >
                   <div className="md:col-span-4 flex items-start gap-3">
                     <span className="font-mono tabular-nums text-sm font-bold text-[#5B21B6] pt-0.5">
-                      0{step.rank}
+                      {padNumber(step.rank)}
                     </span>
                     <div>
                       <div className="text-sm font-bold text-[#18132A]">

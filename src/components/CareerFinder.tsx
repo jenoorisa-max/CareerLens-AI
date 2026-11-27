@@ -14,6 +14,7 @@ import type {
   CareerRecommendation,
   StudentProfile,
 } from "../types/career";
+import { clampPercent, padNumber } from "../lib/format";
 
 interface CareerFinderProps {
   initialProfile: StudentProfile | null;
@@ -545,17 +546,17 @@ export default function CareerFinder({
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {careerResults.careers.map((career, index) => (
               <article
-                key={career.id || career.title}
+                key={`${index}-${career.id || career.title}`}
                 className="flex flex-col justify-between rounded-2xl border border-[#E8E1F8] bg-white p-6 hover:border-[#C5B3F0] transition-colors duration-150"
               >
                 <div className="space-y-4">
                   {/* Unboxed Typographic Metadata Header */}
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-mono tabular-nums font-semibold text-slate-500">
-                      0{index + 1} · Career Match
+                      {padNumber(index + 1)} · Career Match
                     </span>
                     <span className="font-mono tabular-nums font-bold text-[#5B21B6]">
-                      {career.matchScore}% Fit
+                      {clampPercent(career.matchScore)}% Fit
                     </span>
                   </div>
 
@@ -587,9 +588,9 @@ export default function CareerFinder({
                       Day-to-Day Responsibilities
                     </p>
                     <ul className="space-y-1.5">
-                      {career.dayToDay.map((item) => (
+                      {career.dayToDay.map((item, itemIndex) => (
                         <li
-                          key={item}
+                          key={`${itemIndex}-${item}`}
                           className="flex items-start gap-2 text-xs text-slate-600 leading-relaxed"
                         >
                           <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[#5B21B6] shrink-0" />
