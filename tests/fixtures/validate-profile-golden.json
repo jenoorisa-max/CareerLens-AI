@@ -1,0 +1,169 @@
+{
+  "source": "src/server/validation.ts @ 77601fa",
+  "limits": {
+    "name": 100,
+    "educationLevel": 100,
+    "fieldOfStudy": 150,
+    "maxTags": 30,
+    "tagLength": 80,
+    "careerGoals": 2000
+  },
+  "results": [
+    {
+      "ok": true,
+      "value": {
+        "name": "Amina",
+        "educationLevel": "Undergraduate",
+        "fieldOfStudy": "CS",
+        "skills": [
+          "Python"
+        ],
+        "interests": [
+          "AI"
+        ],
+        "careerGoals": "Grow"
+      }
+    },
+    {
+      "ok": false,
+      "error": "Please enter your name."
+    },
+    {
+      "ok": false,
+      "error": "Please enter your name."
+    },
+    {
+      "ok": false,
+      "error": "Please enter your name."
+    },
+    {
+      "ok": false,
+      "error": "Please enter your name."
+    },
+    {
+      "ok": false,
+      "error": "Please enter your name."
+    },
+    {
+      "ok": false,
+      "error": "Please enter your name."
+    },
+    {
+      "ok": false,
+      "error": "Please enter your name."
+    },
+    {
+      "ok": false,
+      "error": "Please enter your name."
+    },
+    {
+      "ok": false,
+      "error": "Please enter your name."
+    },
+    {
+      "ok": true,
+      "value": {
+        "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "educationLevel": "Undergraduate",
+        "fieldOfStudy": "CS",
+        "skills": [
+          "Python"
+        ],
+        "interests": [
+          "AI"
+        ],
+        "careerGoals": "Grow"
+      }
+    },
+    {
+      "ok": false,
+      "error": "Name must be 100 characters or fewer."
+    },
+    {
+      "ok": false,
+      "error": "Please select your education level."
+    },
+    {
+      "ok": false,
+      "error": "Education level must be 100 characters or fewer."
+    },
+    {
+      "ok": false,
+      "error": "Please enter your field of study."
+    },
+    {
+      "ok": false,
+      "error": "Field of study must be 150 characters or fewer."
+    },
+    {
+      "ok": false,
+      "error": "Please add at least one current skill."
+    },
+    {
+      "ok": false,
+      "error": "Please add at least one current skill."
+    },
+    {
+      "ok": false,
+      "error": "Please add at least one current skill."
+    },
+    {
+      "ok": true,
+      "value": {
+        "name": "Amina",
+        "educationLevel": "Undergraduate",
+        "fieldOfStudy": "CS",
+        "skills": [
+          "SQL"
+        ],
+        "interests": [
+          "AI"
+        ],
+        "careerGoals": "Grow"
+      }
+    },
+    {
+      "ok": false,
+      "error": "Please add no more than 30 skills."
+    },
+    {
+      "ok": false,
+      "error": "Each skill must be 80 characters or fewer."
+    },
+    {
+      "ok": false,
+      "error": "Please add at least one interest."
+    },
+    {
+      "ok": false,
+      "error": "Please add no more than 30 interests."
+    },
+    {
+      "ok": false,
+      "error": "Each interest must be 80 characters or fewer."
+    },
+    {
+      "ok": false,
+      "error": "Please describe your career goals."
+    },
+    {
+      "ok": false,
+      "error": "Career goals must be 2000 characters or fewer."
+    },
+    {
+      "ok": true,
+      "value": {
+        "name": "Trimmed",
+        "educationLevel": "Undergraduate",
+        "fieldOfStudy": "CS",
+        "skills": [
+          "Python"
+        ],
+        "interests": [
+          "AI"
+        ],
+        "careerGoals": "g"
+      }
+    }
+  ]
+}
