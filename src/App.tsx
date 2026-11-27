@@ -170,7 +170,8 @@ export default function App() {
   }, [profile, careerResults, selectedCareer, activeTab, skillGapsByCareer, roadmapsByCareer, completedStages]);
 
   // F5: a request interrupted by the refresh is resumed once, as a first-visit
-  // (navigation) load, so F3/F4 rules still apply.
+  // (navigation) load, so F3/F4 rules still apply. Intentionally runs only on
+  // mount (empty dependency list).
   useEffect(() => {
     if (!restored || !selectedCareer) return;
     if (restored.activeTab === "skill-gap") {
@@ -178,7 +179,6 @@ export default function App() {
     } else if (restored.activeTab === "roadmap") {
       void requests.generateRoadmap(selectedCareer, NAVIGATION);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
 
   // The new profile is NOT committed here: the previous assessment stays intact

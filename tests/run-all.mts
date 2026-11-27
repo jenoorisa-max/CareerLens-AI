@@ -12,6 +12,7 @@ const fast = process.argv.includes("--fast");
 const SUITES = [
   "tests/server/handlers.test.mts",              // Step A: shared handlers, validation, API wrappers
   "tests/server/gemini.test.mts",                // Step B/B2: retries, timeouts, 75s budget, safe errors, logs
+  "tests/server/express.test.mts",               // Local server: SPA fallback, API 404/405, JSON errors, npm start, vercel.json
   "tests/frontend/api-and-display.test.mts",     // D1: postJSON, score clamping, padding, render
   "tests/frontend/request-coordination.test.mts",// D2 + follow-up: dedupe, sessions, roadmap wait, failures
   "tests/frontend/cooldown.test.mts",            // D3: 15s cooldown after 503/429

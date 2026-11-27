@@ -13,8 +13,17 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// `npm start` runs `node server.ts --production`. A flag (instead of
+// `NODE_ENV=production node ...`) works the same on Windows, macOS and Linux
+// without extra packages. It is set before express() reads NODE_ENV.
+if (process.argv.includes("--production")) {
+  process.env.NODE_ENV = "production";
+}
+
 // Schemas, prompts, validation and handler logic live in src/server/ and are
 // shared with the Vercel functions in api/, so both entry points behave the same.
+
+const API_POST_ROUTES = ["/api/careers", "/api/skill-gap", "/api/roadmap"];
 
 async function startServer() {
   const app = express();
@@ -39,6 +48,40 @@ async function startServer() {
     res.status(result.status).json(result.body);
   });
 
+  // API paths never fall through to the frontend: wrong method on a known
+  // route -> 405 (same as the Vercel functions), anything else under /api -> 404.
+  app.all(API_POST_ROUTES, (_req, res) => {
+    res.status(405).json({ error: "Method not allowed." });
+  });
+  app.all(/^\/api(\/|$)/, (_req, res) => {
+    res.status(404).json({ error: "Not found." });
+  });
+
+  // Request errors (e.g. malformed JSON from express.json) always get a JSON
+  // response with a safe message; internal details are never sent or logged.
+  app.use(
+    (
+      err: { type?: string; status?: number; statusCode?: number; name?: string },
+      _req: express.Request,
+      res: express.Response,
+      next: express.NextFunction
+    ) => {
+      if (res.headersSent) return next(err);
+      if (err?.type === "entity.parse.failed") {
+        return res.status(400).json({ error: "Invalid JSON request body." });
+      }
+      if (err?.type === "entity.too.large") {
+        return res.status(413).json({ error: "Request body is too large." });
+      }
+      const status = err?.status ?? err?.statusCode;
+      if (typeof status === "number" && status >= 400 && status < 500) {
+        return res.status(status).json({ error: "Invalid request." });
+      }
+      console.error(`[server] unexpected request error (${err?.type ?? err?.name ?? "unknown"})`);
+      return res.status(500).json({ error: "Something went wrong. Please try again." });
+    }
+  );
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: {
@@ -51,7 +94,8 @@ async function startServer() {
   } else {
     const distDir = path.resolve(__dirname, "dist");
     app.use(express.static(distDir));
-    app.get("/{*path}", (_req, res) => {
+    // SPA fallback (Express 4 syntax): every GET outside /api serves the app.
+    app.get(/^(?!\/api(\/|$)).*/, (_req, res) => {
       const indexFile = path.join(distDir, "index.html");
       if (fs.existsSync(indexFile)) {
         res.sendFile(indexFile);
