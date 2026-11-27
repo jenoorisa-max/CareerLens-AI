@@ -7,9 +7,13 @@
 // - F3: a request that just failed is not retried by navigation (tab or career
 //   switching). Deliberate actions (buttons) always retry.
 //
-// Every key includes the session id. A new career search or "New Assessment"
-// starts a new session: older promises are never reused, and their results are
-// ignored. Framework-free so the exact logic App.tsx runs can be unit-tested.
+// Every key includes the session id. A session is one assessment: a profile
+// together with the career results generated for it. A new session starts when
+// a career search SUCCEEDS (the new profile and careers are committed together)
+// or on "New Assessment". Older promises are never reused, and their results
+// are ignored. While a new search runs, or if it fails, the previous assessment
+// stays intact and is never mixed with the new profile.
+// Framework-free so the exact logic App.tsx runs can be unit-tested.
 import { postJSON, type ApiResult } from "./api";
 import type {
   CareerFinderResponse,
@@ -91,8 +95,17 @@ export interface RequestStore {
   getProfile(): StudentProfile | null;
   getSkillGap(careerTitle: string): SkillGapAnalysis | undefined;
   getRoadmap(careerTitle: string): LearningRoadmapData | undefined;
-  /** New career results: App also clears per-career caches and selects the first career. */
-  setCareers(data: CareerFinderResponse): void;
+  /**
+   * A search succeeded: replace the assessment atomically (profile + careers),
+   * clear per-career caches and select the first career.
+   */
+  commitAssessment(profile: StudentProfile, data: CareerFinderResponse): void;
+  /**
+   * A search failed. The previous assessment (if any) is left untouched.
+   * `retryable` is false for input problems (400/413), where resending the
+   * same details cannot help.
+   */
+  onSearchFailed(profile: StudentProfile, message: string, retryable: boolean): void;
   setSkillGap(careerTitle: string, data: SkillGapAnalysis): void;
   setRoadmap(careerTitle: string, data: LearningRoadmapData): void;
   setError(message: string): void;
@@ -108,8 +121,15 @@ const FALLBACK = {
   roadmap: "Failed to generate your learning roadmap.",
 } as const;
 
+/** Input problems cannot be fixed by resending the same details. */
+export function isRetryableStatus(status: number): boolean {
+  return !(status >= 400 && status < 500 && status !== 408 && status !== 429);
+}
+
 export function createRequestCoordinator(store: RequestStore, post: PostFn = postJSON) {
   let sessionId = 0;
+  let searchId = 0;
+  let activeSearchKey: string | null = null;
   const inFlight = new InFlightRequests(() => store.onRequestsChanged());
   const failed = new Set<string>();
 
@@ -132,15 +152,26 @@ export function createRequestCoordinator(store: RequestStore, post: PostFn = pos
   }
 
   function findCareers(profile: StudentProfile): Promise<void> {
-    const session = startNewSession();
-    return inFlight.run(requestKey(session, "careers"), async () => {
+    // Each search has its own key, so a search never reuses another search's
+    // promise (even with a different profile in the same session).
+    searchId += 1;
+    const search = searchId;
+    const session = sessionId;
+    const key = requestKey(session, "careers", `search:${search}`);
+    activeSearchKey = key;
+
+    return inFlight.run(key, async () => {
       const result = await post<CareerFinderResponse>("/api/careers", profile, FALLBACK.careers);
-      if (!isCurrent(session)) return; // stale: a newer session started
+      // Stale: "New Assessment" happened, or a newer search was started.
+      if (!isCurrent(session) || search !== searchId) return;
       if (!result.ok) {
-        store.setError(result.message);
+        store.onSearchFailed(profile, result.message, isRetryableStatus(result.status));
         return;
       }
-      store.setCareers(result.data);
+      // Success: start a new session so requests from the previous assessment
+      // are invalidated, then commit the new profile and careers together.
+      startNewSession();
+      store.commitAssessment(profile, result.data);
     });
   }
 
@@ -235,6 +266,9 @@ export function createRequestCoordinator(store: RequestStore, post: PostFn = pos
       startNewSession();
     },
     isPending(feature: RequestFeature, careerTitle?: string): boolean {
+      if (feature === "careers") {
+        return activeSearchKey !== null && inFlight.has(activeSearchKey);
+      }
       return inFlight.has(requestKey(sessionId, feature, careerTitle));
     },
     hasFailed(feature: RequestFeature, careerTitle?: string): boolean {

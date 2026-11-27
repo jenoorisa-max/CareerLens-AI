@@ -39,6 +39,15 @@ export default function App() {
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // `profile` + `careerResults` always belong together (the committed
+  // assessment). A new search is tracked separately until it succeeds.
+  const [draftProfile, setDraftProfile] = useState<StudentProfile | null>(null);
+  const [searchFailure, setSearchFailure] = useState<{
+    profile: StudentProfile;
+    message: string;
+    retryable: boolean;
+  } | null>(null);
+
   // Latest values for the request coordinator: async request flows read these
   // refs instead of possibly stale render closures.
   const profileRef = useRef<StudentProfile | null>(null);
@@ -66,12 +75,17 @@ export default function App() {
       getProfile: () => profileRef.current,
       getSkillGap: (title) => skillGapsRef.current[title],
       getRoadmap: (title) => roadmapsRef.current[title],
-      setCareers: (data) => {
+      commitAssessment: (newProfile, data) => {
+        updateProfile(newProfile);
         setCareerResults(data);
         setSelectedCareer(data.careers[0] ?? null);
         replaceSkillGaps({});
         replaceRoadmaps({});
+        setDraftProfile(null);
+        setSearchFailure(null);
       },
+      onSearchFailed: (attemptedProfile, message, retryable) =>
+        setSearchFailure({ profile: attemptedProfile, message, retryable }),
       setSkillGap: (title, data) =>
         replaceSkillGaps({ ...skillGapsRef.current, [title]: data }),
       setRoadmap: (title, data) =>
@@ -82,10 +96,17 @@ export default function App() {
   }
   const requests = coordinatorRef.current;
 
+  // The new profile is NOT committed here: the previous assessment stays intact
+  // until the search succeeds, so old results are never shown with a new profile.
   const handleFindCareers = async (newProfile: StudentProfile) => {
     setErrorMessage(null);
-    updateProfile(newProfile);
+    setSearchFailure(null);
+    setDraftProfile(newProfile);
     await requests.findCareers(newProfile);
+  };
+
+  const handleRetrySearch = () => {
+    if (searchFailure) void handleFindCareers(searchFailure.profile);
   };
 
   const handleAnalyzeSkillGap = (
@@ -129,6 +150,8 @@ export default function App() {
   const handleReset = () => {
     requests.reset();
     updateProfile(null);
+    setDraftProfile(null);
+    setSearchFailure(null);
     setCareerResults(null);
     setSelectedCareer(null);
     replaceSkillGaps({});
@@ -228,9 +251,16 @@ export default function App() {
 
           {activeTab === "finder" && (
             <CareerFinder
-              initialProfile={profile}
+              initialProfile={draftProfile ?? profile}
               careerResults={careerResults}
+              resultsProfile={profile}
               isLoading={loadingCareers}
+              searchFailure={
+                searchFailure
+                  ? { message: searchFailure.message, retryable: searchFailure.retryable }
+                  : null
+              }
+              onRetrySearch={handleRetrySearch}
               onSubmitProfile={handleFindCareers}
               onSelectForSkillGap={(career) =>
                 handleAnalyzeSkillGap(career, DELIBERATE)

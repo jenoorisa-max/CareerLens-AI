@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   Wand2,
   Map,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import type {
   CareerFinderResponse,
@@ -19,7 +21,12 @@ import { clampPercent, padNumber } from "../lib/format";
 interface CareerFinderProps {
   initialProfile: StudentProfile | null;
   careerResults: CareerFinderResponse | null;
+  /** The profile the displayed career results were generated for. */
+  resultsProfile?: StudentProfile | null;
   isLoading: boolean;
+  /** The latest search failed; any results shown belong to the previous assessment. */
+  searchFailure?: { message: string; retryable: boolean } | null;
+  onRetrySearch?: () => void;
   onSubmitProfile: (profile: StudentProfile) => Promise<void>;
   onSelectForSkillGap: (career: CareerRecommendation) => void;
   onSelectForRoadmap: (career: CareerRecommendation) => void;
@@ -57,7 +64,10 @@ const QUICK_INTERESTS = [
 export default function CareerFinder({
   initialProfile,
   careerResults,
+  resultsProfile = null,
   isLoading,
+  searchFailure = null,
+  onRetrySearch,
   onSubmitProfile,
   onSelectForSkillGap,
   onSelectForRoadmap,
@@ -514,6 +524,45 @@ export default function CareerFinder({
         </section>
       )}
 
+      {/* Failed Search: the new details were not analyzed. Any results below
+          belong to the previous assessment and are labelled as such. */}
+      {!isLoading && searchFailure && (
+        <section
+          role="alert"
+          className="rounded-2xl border border-[#E8E1F8] bg-[#FAF8FF] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        >
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-[#5B21B6] shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-[#18132A]">
+                We couldn&apos;t generate career paths for your updated details.
+              </p>
+              <p className="mt-0.5 text-xs text-slate-600 leading-relaxed">
+                {searchFailure.message}
+                {careerResults && resultsProfile && (
+                  <>
+                    {" "}
+                    The results below are from your previous assessment for{" "}
+                    <span className="font-semibold">{resultsProfile.name}</span> (
+                    {resultsProfile.fieldOfStudy}).
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+          {searchFailure.retryable && onRetrySearch && (
+            <button
+              type="button"
+              onClick={onRetrySearch}
+              className="self-start sm:self-center inline-flex items-center gap-2 rounded-xl border border-[#DDD3F6] bg-white px-4 py-2.5 text-xs font-semibold text-[#4C1D95] hover:bg-[#F3EEFF] transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5B21B6]"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Try again
+            </button>
+          )}
+        </section>
+      )}
+
       {/* Recommended Careers Output */}
       {!isLoading && careerResults && (
         <section className="space-y-6 animate-enter">
@@ -524,6 +573,11 @@ export default function CareerFinder({
                 <h3 className="text-base font-bold text-[#18132A]">
                   Profile Synthesis
                 </h3>
+                {resultsProfile && (
+                  <p className="text-xs font-medium text-slate-500">
+                    For {resultsProfile.name} · {resultsProfile.fieldOfStudy}
+                  </p>
+                )}
                 <p className="mt-1 text-sm text-slate-700 leading-relaxed">
                   {careerResults.profileSummary}
                 </p>
