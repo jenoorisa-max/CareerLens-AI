@@ -16,8 +16,17 @@ const MAX_ATTEMPTS = 3;
 const MAX_ATTEMPT_TIMEOUT_MS = 30_000;
 /** Hard limit for the whole call: every attempt, plus the delays between them. */
 const TOTAL_BUDGET_MS = 75_000;
-/** Delay before attempt 2 and attempt 3. */
+/** Delay before attempt 2 and attempt 3 (timeouts, network, empty, JSON, shape). */
 const RETRY_DELAYS_MS = [500, 1_000];
+/**
+ * Server overload (HTTP 500/502/503/504) gets a longer, randomised backoff so
+ * the retries are spread out instead of hitting a busy model back-to-back.
+ * Delay = baseMs + random jitter in [0, maxJitterMs).
+ */
+const OVERLOAD_RETRY_DELAYS_MS = [
+  { baseMs: 2_000, maxJitterMs: 1_000 }, // before attempt 2: 2–3s
+  { baseMs: 5_000, maxJitterMs: 2_000 }, // before attempt 3: 5–7s
+];
 /** A retry is only started if at least this much of the budget is left for it. */
 const MIN_ATTEMPT_TIME_MS = 5_000;
 /**
@@ -157,6 +166,22 @@ function isRetryable(failure: GeminiFailure): boolean {
   }
 }
 
+/** Delay before the next attempt, in ms. `attempt` is the attempt that just failed. */
+function retryDelayMs(failure: GeminiFailure, attempt: number): number {
+  const isOverload =
+    failure.kind === "http" &&
+    failure.status !== undefined &&
+    RETRYABLE_HTTP_STATUSES.has(failure.status);
+
+  if (isOverload) {
+    const step =
+      OVERLOAD_RETRY_DELAYS_MS[attempt - 1] ??
+      OVERLOAD_RETRY_DELAYS_MS[OVERLOAD_RETRY_DELAYS_MS.length - 1];
+    return step.baseMs + Math.floor(Math.random() * step.maxJitterMs);
+  }
+  return RETRY_DELAYS_MS[attempt - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
+}
+
 function redactSecrets(text: string, apiKey: string | undefined): string {
   let safe = text;
   if (apiKey) safe = safe.split(apiKey).join("[REDACTED]");
@@ -287,7 +312,9 @@ export async function generateStructuredJSON<T>(params: {
       return data as T;
     } catch (error) {
       const failure = toFailure(error);
-      const delay = RETRY_DELAYS_MS[attempt - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
+      // Computed (including jitter) before the budget check, so the check
+      // accounts for the exact delay that will be slept.
+      const delay = retryDelayMs(failure, attempt);
 
       let retrying = attempt < MAX_ATTEMPTS && isRetryable(failure);
       if (retrying && failure.kind === "invalid_shape") {
