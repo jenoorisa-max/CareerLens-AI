@@ -29,6 +29,8 @@ interface LearningRoadmapProps {
   isLoading: boolean;
   /** The last request for the selected career failed (shows a retry hint). */
   hasFailed?: boolean;
+  /** Seconds left in the global AI cooldown (0 = none). */
+  cooldownSeconds?: number;
   onSelectCareerForRoadmap: (
     career: CareerRecommendation,
     forceRefresh?: boolean
@@ -43,6 +45,7 @@ export default function LearningRoadmap({
   roadmap,
   isLoading,
   hasFailed = false,
+  cooldownSeconds = 0,
   onSelectCareerForRoadmap,
   onGoToFinder,
 }: LearningRoadmapProps) {
@@ -112,14 +115,14 @@ export default function LearningRoadmap({
             <div className="flex items-center gap-2.5 shrink-0">
               <button
                 type="button"
-                disabled={isLoading}
+                disabled={isLoading || cooldownSeconds > 0}
                 onClick={() => onSelectCareerForRoadmap(selectedCareer, true)}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-[#DDD3F6] bg-[#FAF8FF] px-3.5 py-2 text-xs font-semibold text-[#4C1D95] hover:bg-[#F3EEFF] transition-colors whitespace-nowrap disabled:opacity-50"
               >
                 <RefreshCw
                   className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`}
                 />
-                Regenerate
+                {cooldownSeconds > 0 ? `Try again in ${cooldownSeconds}s` : "Regenerate"}
               </button>
               {roadmap && (
                 <button
@@ -179,7 +182,9 @@ export default function LearningRoadmap({
             This roadmap didn&apos;t complete
           </h3>
           <p className="mt-1 text-sm text-slate-500">
-            Use Regenerate above to try again for {selectedCareer?.title}.
+            {cooldownSeconds > 0
+              ? `The AI service is busy. You can try again in ${cooldownSeconds}s.`
+              : `Use Regenerate above to try again for ${selectedCareer?.title ?? "this career"}.`}
           </p>
         </div>
       )}

@@ -25,6 +25,8 @@ interface SkillGapAnalyzerProps {
   isLoading: boolean;
   /** The last request for the selected career failed (shows a retry hint). */
   hasFailed?: boolean;
+  /** Seconds left in the global AI cooldown (0 = none). */
+  cooldownSeconds?: number;
   onSelectCareer: (career: CareerRecommendation, forceRefresh?: boolean) => void;
   onGoToRoadmap: () => void;
   onGoToFinder: () => void;
@@ -37,6 +39,7 @@ export default function SkillGapAnalyzer({
   analysis,
   isLoading,
   hasFailed = false,
+  cooldownSeconds = 0,
   onSelectCareer,
   onGoToRoadmap,
   onGoToFinder,
@@ -88,14 +91,14 @@ export default function SkillGapAnalyzer({
           {selectedCareer && (
             <button
               type="button"
-              disabled={isLoading}
+              disabled={isLoading || cooldownSeconds > 0}
               onClick={() => onSelectCareer(selectedCareer, true)}
               className="self-start inline-flex items-center gap-2 rounded-xl border border-[#DDD3F6] bg-[#FAF8FF] px-4 py-2 text-xs font-semibold text-[#4C1D95] hover:bg-[#F3EEFF] transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
             >
               <RefreshCw
                 className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`}
               />
-              Re-analyze
+              {cooldownSeconds > 0 ? `Try again in ${cooldownSeconds}s` : "Re-analyze"}
             </button>
           )}
         </div>
@@ -145,7 +148,9 @@ export default function SkillGapAnalyzer({
             This analysis didn&apos;t complete
           </h3>
           <p className="mt-1 text-sm text-slate-500">
-            Use Re-analyze above to try again for {selectedCareer?.title}.
+            {cooldownSeconds > 0
+              ? `The AI service is busy. You can try again in ${cooldownSeconds}s.`
+              : `Use Re-analyze above to try again for ${selectedCareer?.title ?? "this career"}.`}
           </p>
         </div>
       )}

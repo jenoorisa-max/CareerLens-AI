@@ -24,6 +24,8 @@ interface CareerFinderProps {
   /** The profile the displayed career results were generated for. */
   resultsProfile?: StudentProfile | null;
   isLoading: boolean;
+  /** Seconds left in the global AI cooldown (0 = none). */
+  cooldownSeconds?: number;
   /** The latest search failed; any results shown belong to the previous assessment. */
   searchFailure?: { message: string; retryable: boolean } | null;
   onRetrySearch?: () => void;
@@ -66,6 +68,7 @@ export default function CareerFinder({
   careerResults,
   resultsProfile = null,
   isLoading,
+  cooldownSeconds = 0,
   searchFailure = null,
   onRetrySearch,
   onSubmitProfile,
@@ -475,7 +478,7 @@ export default function CareerFinder({
             </p>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || cooldownSeconds > 0}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#5B21B6] px-6 py-3 text-sm font-semibold text-white hover:bg-[#4C1D95] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5B21B6]/50 transition-colors whitespace-nowrap shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {isLoading ? (
@@ -483,6 +486,8 @@ export default function CareerFinder({
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Analyzing Profile...
                 </>
+              ) : cooldownSeconds > 0 ? (
+                <span>Try again in {cooldownSeconds}s</span>
               ) : (
                 <>
                   <span>Find 3 Career Paths</span>
@@ -554,10 +559,11 @@ export default function CareerFinder({
             <button
               type="button"
               onClick={onRetrySearch}
-              className="self-start sm:self-center inline-flex items-center gap-2 rounded-xl border border-[#DDD3F6] bg-white px-4 py-2.5 text-xs font-semibold text-[#4C1D95] hover:bg-[#F3EEFF] transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5B21B6]"
+              disabled={cooldownSeconds > 0}
+              className="self-start sm:self-center inline-flex items-center gap-2 rounded-xl border border-[#DDD3F6] bg-white px-4 py-2.5 text-xs font-semibold text-[#4C1D95] hover:bg-[#F3EEFF] transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5B21B6] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RefreshCw className="h-3.5 w-3.5" />
-              Try again
+              {cooldownSeconds > 0 ? `Try again in ${cooldownSeconds}s` : "Try again"}
             </button>
           )}
         </section>

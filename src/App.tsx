@@ -1,4 +1,4 @@
-import React, { useReducer, useRef, useState } from "react";
+import React, { useEffect, useReducer, useRef, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import SidebarNav from "./components/SidebarNav";
 import CareerFinder from "./components/CareerFinder";
@@ -14,6 +14,8 @@ import type {
 } from "./types/career";
 import {
   createRequestCoordinator,
+  loadCooldownUntil,
+  saveCooldownUntil,
   type RequestCoordinator,
   type RequestOptions,
 } from "./lib/requests";
@@ -92,13 +94,28 @@ export default function App() {
         replaceRoadmaps({ ...roadmapsRef.current, [title]: data }),
       setError: (message) => setErrorMessage(message),
       onRequestsChanged: () => rerender(),
-    });
+      onCooldownChanged: (until) => saveCooldownUntil(until),
+    }, undefined, { initialCooldownUntil: loadCooldownUntil() });
   }
   const requests = coordinatorRef.current;
+
+  // F4: re-render every 500ms only while a cooldown is active, so the
+  // countdown updates; the interval is always cleared.
+  const cooldownUntil = requests.cooldownUntil;
+  useEffect(() => {
+    if (cooldownUntil <= Date.now()) return;
+    const id = setInterval(() => {
+      rerender();
+      if (Date.now() >= cooldownUntil) clearInterval(id);
+    }, 500);
+    return () => clearInterval(id);
+  }, [cooldownUntil]);
+  const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
 
   // The new profile is NOT committed here: the previous assessment stays intact
   // until the search succeeds, so old results are never shown with a new profile.
   const handleFindCareers = async (newProfile: StudentProfile) => {
+    if (requests.isCoolingDown()) return; // button is disabled; guard anyway
     setErrorMessage(null);
     setSearchFailure(null);
     setDraftProfile(newProfile);
@@ -255,6 +272,7 @@ export default function App() {
               careerResults={careerResults}
               resultsProfile={profile}
               isLoading={loadingCareers}
+              cooldownSeconds={cooldownSeconds}
               searchFailure={
                 searchFailure
                   ? { message: searchFailure.message, retryable: searchFailure.retryable }
@@ -279,6 +297,7 @@ export default function App() {
               analysis={currentSkillGap}
               isLoading={loadingSkillGap}
               hasFailed={skillGapFailed}
+              cooldownSeconds={cooldownSeconds}
               onSelectCareer={(career, refresh) =>
                 handleAnalyzeSkillGap(
                   career,
@@ -302,6 +321,7 @@ export default function App() {
               roadmap={currentRoadmap}
               isLoading={loadingRoadmap}
               hasFailed={roadmapFailed}
+              cooldownSeconds={cooldownSeconds}
               onSelectCareerForRoadmap={(career, refresh) =>
                 handleGenerateRoadmap(
                   career,

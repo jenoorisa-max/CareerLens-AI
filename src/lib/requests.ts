@@ -111,6 +111,41 @@ export interface RequestStore {
   setError(message: string): void;
   /** Pending or failed state changed; App re-renders. */
   onRequestsChanged(): void;
+  /** F4: a new cooldown started (App persists it so a refresh cannot skip it). */
+  onCooldownChanged?(until: number): void;
+}
+
+// ---------------------------------------------------------------------------
+// F4: global cooldown after HTTP 503 / 429
+// ---------------------------------------------------------------------------
+
+export const COOLDOWN_MS = 15_000;
+const COOLDOWN_STATUSES = new Set([429, 503]);
+export const COOLDOWN_STORAGE_KEY = "careerlens:cooldownUntil";
+
+/** Reads a saved cooldown end time; 0 if missing, invalid or storage unavailable. */
+export function loadCooldownUntil(): number {
+  try {
+    const value = Number(sessionStorage.getItem(COOLDOWN_STORAGE_KEY));
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function saveCooldownUntil(until: number): void {
+  try {
+    sessionStorage.setItem(COOLDOWN_STORAGE_KEY, String(until));
+  } catch {
+    // Storage unavailable (private mode, quota): cooldown still works in memory.
+  }
+}
+
+export interface CoordinatorOptions {
+  /** Clock, injectable for tests. */
+  now?: () => number;
+  /** Restored cooldown end time (from sessionStorage). */
+  initialCooldownUntil?: number;
 }
 
 export type PostFn = <T>(url: string, body: unknown, fallbackMessage: string) => Promise<ApiResult<T>>;
@@ -126,12 +161,35 @@ export function isRetryableStatus(status: number): boolean {
   return !(status >= 400 && status < 500 && status !== 408 && status !== 429);
 }
 
-export function createRequestCoordinator(store: RequestStore, post: PostFn = postJSON) {
+export function createRequestCoordinator(
+  store: RequestStore,
+  post: PostFn = postJSON,
+  options: CoordinatorOptions = {}
+) {
   let sessionId = 0;
   let searchId = 0;
   let activeSearchKey: string | null = null;
   const inFlight = new InFlightRequests(() => store.onRequestsChanged());
   const failed = new Set<string>();
+
+  const now = options.now ?? (() => Date.now());
+  // A restored value is only trusted if it is in the future and no longer than
+  // one cooldown away (guards against tampered storage or clock changes).
+  const restored = options.initialCooldownUntil ?? 0;
+  let cooldownUntil =
+    Number.isFinite(restored) && restored > now()
+      ? Math.min(restored, now() + COOLDOWN_MS)
+      : 0;
+
+  const isCoolingDown = () => now() < cooldownUntil;
+
+  /** Any 503/429 response starts (or extends) the global cooldown. */
+  function noteStatus(status: number) {
+    if (!COOLDOWN_STATUSES.has(status)) return;
+    cooldownUntil = now() + COOLDOWN_MS;
+    store.onCooldownChanged?.(cooldownUntil);
+    store.onRequestsChanged();
+  }
 
   const isCurrent = (session: number) => session === sessionId;
 
@@ -152,6 +210,7 @@ export function createRequestCoordinator(store: RequestStore, post: PostFn = pos
   }
 
   function findCareers(profile: StudentProfile): Promise<void> {
+    if (isCoolingDown()) return Promise.resolve(); // UI also disables the button
     // Each search has its own key, so a search never reuses another search's
     // promise (even with a different profile in the same session).
     searchId += 1;
@@ -162,6 +221,7 @@ export function createRequestCoordinator(store: RequestStore, post: PostFn = pos
 
     return inFlight.run(key, async () => {
       const result = await post<CareerFinderResponse>("/api/careers", profile, FALLBACK.careers);
+      if (!result.ok) noteStatus(result.status);
       // Stale: "New Assessment" happened, or a newer search was started.
       if (!isCurrent(session) || search !== searchId) return;
       if (!result.ok) {
@@ -193,6 +253,12 @@ export function createRequestCoordinator(store: RequestStore, post: PostFn = pos
     const profile = store.getProfile();
     if (!profile) return Promise.resolve(null);
 
+    // F4: no request during cooldown; mark it so the view offers a manual retry later.
+    if (isCoolingDown()) {
+      setFailed(key, true);
+      return Promise.resolve(null);
+    }
+
     setFailed(key, false);
     return inFlight.run(key, async () => {
       const result = await post<SkillGapAnalysis>(
@@ -200,6 +266,7 @@ export function createRequestCoordinator(store: RequestStore, post: PostFn = pos
         { profile, career },
         FALLBACK.skillGap
       );
+      if (!result.ok) noteStatus(result.status);
       if (!isCurrent(session)) return null;
       if (!result.ok) {
         setFailed(key, true);
@@ -229,6 +296,11 @@ export function createRequestCoordinator(store: RequestStore, post: PostFn = pos
     const profile = store.getProfile();
     if (!profile) return Promise.resolve(null);
 
+    if (isCoolingDown()) {
+      setFailed(key, true);
+      return Promise.resolve(null);
+    }
+
     setFailed(key, false);
     return inFlight.run(key, async () => {
       // F2: use the matching skill gap, waiting for it if it is still running.
@@ -240,12 +312,18 @@ export function createRequestCoordinator(store: RequestStore, post: PostFn = pos
         if (pendingGap) skillGap = await pendingGap;
       }
       if (!isCurrent(session)) return null;
+      // The awaited skill gap may itself have hit 503/429 and started a cooldown.
+      if (isCoolingDown()) {
+        setFailed(key, true);
+        return null;
+      }
 
       const result = await post<LearningRoadmapData>(
         "/api/roadmap",
         { profile, career, skillGap },
         FALLBACK.roadmap
       );
+      if (!result.ok) noteStatus(result.status);
       if (!isCurrent(session)) return null;
       if (!result.ok) {
         setFailed(key, true);
@@ -277,6 +355,11 @@ export function createRequestCoordinator(store: RequestStore, post: PostFn = pos
     get sessionId(): number {
       return sessionId;
     },
+    /** F4: end time of the current cooldown (0 = none). */
+    get cooldownUntil(): number {
+      return cooldownUntil;
+    },
+    isCoolingDown,
   };
 }
 
