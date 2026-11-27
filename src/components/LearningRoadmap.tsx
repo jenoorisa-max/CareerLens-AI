@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   Clock,
   Wrench,
@@ -31,6 +31,9 @@ interface LearningRoadmapProps {
   hasFailed?: boolean;
   /** Seconds left in the global AI cooldown (0 = none). */
   cooldownSeconds?: number;
+  /** Completed stage numbers for the selected career (owned by App). */
+  completedStages?: Record<number, boolean>;
+  onToggleStage?: (stageNumber: number) => void;
   onSelectCareerForRoadmap: (
     career: CareerRecommendation,
     forceRefresh?: boolean
@@ -46,13 +49,11 @@ export default function LearningRoadmap({
   isLoading,
   hasFailed = false,
   cooldownSeconds = 0,
+  completedStages = {},
+  onToggleStage = () => {},
   onSelectCareerForRoadmap,
   onGoToFinder,
 }: LearningRoadmapProps) {
-  const [completedStages, setCompletedStages] = useState<
-    Record<string, boolean>
-  >({});
-
   if (!profile || careers.length === 0) {
     return (
       <div className="rounded-2xl border border-[#E8E1F8] bg-white p-10 text-center max-w-xl mx-auto mt-6 animate-enter">
@@ -79,15 +80,8 @@ export default function LearningRoadmap({
     );
   }
 
-  const toggleStage = (careerTitle: string, stageNum: number) => {
-    const key = `${careerTitle}::${stageNum}`;
-    setCompletedStages((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
   const completedCount = roadmap
-    ? roadmap.stages.filter(
-        (s) => completedStages[`${roadmap.careerTitle}::${s.stageNumber}`]
-      ).length
+    ? roadmap.stages.filter((s) => completedStages[s.stageNumber]).length
     : 0;
   const totalStages = roadmap?.stages.length ?? 0;
   const progressPercent =
@@ -232,8 +226,7 @@ export default function LearningRoadmap({
           {/* Stages */}
           <div className="space-y-6">
             {roadmap.stages.map((stage, stageIndex) => {
-              const stageKey = `${roadmap.careerTitle}::${stage.stageNumber}`;
-              const isDone = Boolean(completedStages[stageKey]);
+              const isDone = Boolean(completedStages[stage.stageNumber]);
 
               return (
                 <article
@@ -266,7 +259,7 @@ export default function LearningRoadmap({
                     <button
                       type="button"
                       onClick={() =>
-                        toggleStage(roadmap.careerTitle, stage.stageNumber)
+                        onToggleStage(stage.stageNumber)
                       }
                       className={`self-start sm:self-center inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 no-print ${
                         isDone

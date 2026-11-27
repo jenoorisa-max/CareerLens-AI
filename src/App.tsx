@@ -19,25 +19,56 @@ import {
   type RequestCoordinator,
   type RequestOptions,
 } from "./lib/requests";
+import { clearSession, loadSession, saveSession } from "./lib/session";
 
 const DELIBERATE: RequestOptions = { trigger: "deliberate" };
 const DELIBERATE_REFRESH: RequestOptions = { trigger: "deliberate", forceRefresh: true };
 const NAVIGATION: RequestOptions = { trigger: "navigation" };
 
+/** Progress keys: "<career title>::<stage number>". */
+const stageKey = (careerTitle: string, stageNumber: number) =>
+  `${careerTitle}::${stageNumber}`;
+
+function withoutCareerProgress(
+  progress: Record<string, true>,
+  careerTitle: string
+): Record<string, true> {
+  const prefix = `${careerTitle}::`;
+  return Object.fromEntries(
+    Object.entries(progress).filter(([key]) => !key.startsWith(prefix))
+  ) as Record<string, true>;
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("finder");
-  const [profile, setProfile] = useState<StudentProfile | null>(null);
+  // F5: restore the previous session (validated) once, on first render.
+  const [restored] = useState(() => loadSession());
+
+  const [activeTab, setActiveTab] = useState<ActiveTab>(
+    restored?.activeTab ?? "finder"
+  );
+  const [profile, setProfile] = useState<StudentProfile | null>(
+    restored?.profile ?? null
+  );
   const [careerResults, setCareerResults] =
-    useState<CareerFinderResponse | null>(null);
+    useState<CareerFinderResponse | null>(restored?.careerResults ?? null);
   const [selectedCareer, setSelectedCareer] =
-    useState<CareerRecommendation | null>(null);
+    useState<CareerRecommendation | null>(
+      restored?.careerResults.careers.find(
+        (c) => c.title === restored.selectedCareerTitle
+      ) ?? null
+    );
 
   const [skillGapsByCareer, setSkillGapsByCareer] = useState<
     Record<string, SkillGapAnalysis>
-  >({});
+  >(restored?.skillGapsByCareer ?? {});
   const [roadmapsByCareer, setRoadmapsByCareer] = useState<
     Record<string, LearningRoadmapData>
-  >({});
+  >(restored?.roadmapsByCareer ?? {});
+  // Roadmap progress lives here (not in LearningRoadmap) so it survives tab
+  // switches and refreshes.
+  const [completedStages, setCompletedStages] = useState<Record<string, true>>(
+    restored?.completedStages ?? {}
+  );
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -52,9 +83,13 @@ export default function App() {
 
   // Latest values for the request coordinator: async request flows read these
   // refs instead of possibly stale render closures.
-  const profileRef = useRef<StudentProfile | null>(null);
-  const skillGapsRef = useRef<Record<string, SkillGapAnalysis>>({});
-  const roadmapsRef = useRef<Record<string, LearningRoadmapData>>({});
+  const profileRef = useRef<StudentProfile | null>(restored?.profile ?? null);
+  const skillGapsRef = useRef<Record<string, SkillGapAnalysis>>(
+    restored?.skillGapsByCareer ?? {}
+  );
+  const roadmapsRef = useRef<Record<string, LearningRoadmapData>>(
+    restored?.roadmapsByCareer ?? {}
+  );
   const [, rerender] = useReducer((n: number) => n + 1, 0);
 
   const updateProfile = (next: StudentProfile | null) => {
@@ -83,6 +118,7 @@ export default function App() {
         setSelectedCareer(data.careers[0] ?? null);
         replaceSkillGaps({});
         replaceRoadmaps({});
+        setCompletedStages({});
         setDraftProfile(null);
         setSearchFailure(null);
       },
@@ -90,8 +126,11 @@ export default function App() {
         setSearchFailure({ profile: attemptedProfile, message, retryable }),
       setSkillGap: (title, data) =>
         replaceSkillGaps({ ...skillGapsRef.current, [title]: data }),
-      setRoadmap: (title, data) =>
-        replaceRoadmaps({ ...roadmapsRef.current, [title]: data }),
+      setRoadmap: (title, data) => {
+        replaceRoadmaps({ ...roadmapsRef.current, [title]: data });
+        // A new (e.g. regenerated) roadmap may have different stages.
+        setCompletedStages((prev) => withoutCareerProgress(prev, title));
+      },
       setError: (message) => setErrorMessage(message),
       onRequestsChanged: () => rerender(),
       onCooldownChanged: (until) => saveCooldownUntil(until),
@@ -111,6 +150,36 @@ export default function App() {
     return () => clearInterval(id);
   }, [cooldownUntil]);
   const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
+
+  // F5: save the committed assessment whenever it changes; clear it when there
+  // is none (e.g. after "New Assessment").
+  useEffect(() => {
+    if (!profile || !careerResults || !selectedCareer) {
+      clearSession();
+      return;
+    }
+    saveSession({
+      profile,
+      careerResults,
+      selectedCareerTitle: selectedCareer.title,
+      activeTab,
+      skillGapsByCareer,
+      roadmapsByCareer,
+      completedStages,
+    });
+  }, [profile, careerResults, selectedCareer, activeTab, skillGapsByCareer, roadmapsByCareer, completedStages]);
+
+  // F5: a request interrupted by the refresh is resumed once, as a first-visit
+  // (navigation) load, so F3/F4 rules still apply.
+  useEffect(() => {
+    if (!restored || !selectedCareer) return;
+    if (restored.activeTab === "skill-gap") {
+      void requests.analyzeSkillGap(selectedCareer, NAVIGATION);
+    } else if (restored.activeTab === "roadmap") {
+      void requests.generateRoadmap(selectedCareer, NAVIGATION);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
+  }, []);
 
   // The new profile is NOT committed here: the previous assessment stays intact
   // until the search succeeds, so old results are never shown with a new profile.
@@ -166,9 +235,11 @@ export default function App() {
 
   const handleReset = () => {
     requests.reset();
+    clearSession();
     updateProfile(null);
     setDraftProfile(null);
     setSearchFailure(null);
+    setCompletedStages({});
     setCareerResults(null);
     setSelectedCareer(null);
     replaceSkillGaps({});
@@ -199,6 +270,26 @@ export default function App() {
   const roadmapFailed = selectedCareer
     ? requests.hasFailed("roadmap", selectedCareer.title)
     : false;
+
+  // Completed stage numbers for the selected career's roadmap.
+  const currentProgress: Record<number, boolean> = {};
+  if (selectedCareer) {
+    const prefix = `${selectedCareer.title}::`;
+    for (const key of Object.keys(completedStages)) {
+      if (key.startsWith(prefix)) currentProgress[Number(key.slice(prefix.length))] = true;
+    }
+  }
+  const handleToggleStage = (stageNumber: number) => {
+    if (!selectedCareer) return;
+    const key = stageKey(selectedCareer.title, stageNumber);
+    setCompletedStages((prev) => {
+      if (prev[key]) {
+        const { [key]: _removed, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [key]: true };
+    });
+  };
 
   const sectionLabel =
     activeTab === "finder"
@@ -322,6 +413,8 @@ export default function App() {
               isLoading={loadingRoadmap}
               hasFailed={roadmapFailed}
               cooldownSeconds={cooldownSeconds}
+              completedStages={currentProgress}
+              onToggleStage={handleToggleStage}
               onSelectCareerForRoadmap={(career, refresh) =>
                 handleGenerateRoadmap(
                   career,
