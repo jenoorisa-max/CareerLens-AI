@@ -1,6 +1,8 @@
 import React, { useEffect, useReducer, useRef, useState } from "react";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, Home, X } from "lucide-react";
 import SidebarNav from "./components/SidebarNav";
+import LandingPage from "./components/LandingPage";
+import DashboardOverview from "./components/DashboardOverview";
 import CareerFinder from "./components/CareerFinder";
 import SkillGapAnalyzer from "./components/SkillGapAnalyzer";
 import LearningRoadmap from "./components/LearningRoadmap";
@@ -20,6 +22,9 @@ import {
   type RequestOptions,
 } from "./lib/requests";
 import { clearSession, loadSession, saveSession } from "./lib/session";
+
+/** URL hash of the application view; anything else shows the Landing Page. */
+const APP_HASH = "#/app";
 
 const DELIBERATE: RequestOptions = { trigger: "deliberate" };
 const DELIBERATE_REFRESH: RequestOptions = { trigger: "deliberate", forceRefresh: true };
@@ -169,11 +174,24 @@ export default function App() {
     });
   }, [profile, careerResults, selectedCareer, activeTab, skillGapsByCareer, roadmapsByCareer, completedStages]);
 
+  // Landing Page vs application. The app lives at "#/app" so a refresh keeps
+  // the Dashboard open and the browser Back button returns to the Landing Page.
+  const [view, setView] = useState<"landing" | "app">(() =>
+    window.location.hash === APP_HASH ? "app" : "landing"
+  );
+  useEffect(() => {
+    const onHashChange = () =>
+      setView(window.location.hash === APP_HASH ? "app" : "landing");
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
   // F5: a request interrupted by the refresh is resumed once, as a first-visit
   // (navigation) load, so F3/F4 rules still apply. Intentionally runs only on
-  // mount (empty dependency list).
+  // mount (empty dependency list), and only if the app (not the Landing Page)
+  // is what the user is looking at.
   useEffect(() => {
-    if (!restored || !selectedCareer) return;
+    if (view !== "app" || !restored || !selectedCareer) return;
     if (restored.activeTab === "skill-gap") {
       void requests.analyzeSkillGap(selectedCareer, NAVIGATION);
     } else if (restored.activeTab === "roadmap") {
@@ -231,6 +249,21 @@ export default function App() {
     } else if (tab === "roadmap") {
       void requests.generateRoadmap(selectedCareer, NAVIGATION);
     }
+  };
+
+  // Opens the application from the Landing Page, through the existing tab
+  // navigation (so cached results, F3 failure rules and F4 cooldown apply).
+  const openApp = (tab: ActiveTab = activeTab) => {
+    if (window.location.hash !== APP_HASH) window.location.hash = APP_HASH;
+    setView("app");
+    handleTabChange(tab);
+    window.scrollTo({ top: 0 });
+  };
+
+  const goHome = () => {
+    window.history.pushState(null, "", window.location.pathname + window.location.search);
+    setView("landing");
+    window.scrollTo({ top: 0 });
   };
 
   const handleReset = () => {
@@ -292,17 +325,39 @@ export default function App() {
   };
 
   const sectionLabel =
-    activeTab === "finder"
+    activeTab === "dashboard"
+      ? "Dashboard"
+      : activeTab === "finder"
       ? "Career Finder"
       : activeTab === "skill-gap"
       ? "Skill Gap Analyzer"
       : "Learning Roadmap";
 
+  if (view === "landing") {
+    // Get Started: start at Career Finder, or continue where the user left off
+    // if an assessment already exists.
+    return (
+      <LandingPage
+        onGetStarted={() => openApp(careerResults ? activeTab : "finder")}
+        onOpenFeature={openApp}
+      />
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen cl-app-bg">
+      <button
+        type="button"
+        className="cl-skip-link"
+        onClick={() => document.getElementById("main-content")?.focus()}
+      >
+        Skip to main content
+      </button>
       <SidebarNav
         activeTab={activeTab}
         onSelectTab={handleTabChange}
+        onGoHome={goHome}
+        pageTitle={sectionLabel}
         profile={profile}
         hasCareers={Boolean(careerResults)}
         selectedCareer={selectedCareer}
@@ -312,32 +367,46 @@ export default function App() {
       />
 
       <div className="lg:pl-[272px]">
-        {/* Desktop Breadcrumb Bar */}
-        <div className="hidden lg:flex items-center justify-between h-15 px-10 border-b border-[#E8E1F8] bg-white no-print">
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-            <span className="font-semibold text-[#18132A]">CareerLens AI</span>
-            <span aria-hidden="true">/</span>
-            <span className="text-[#5B21B6] font-semibold">{sectionLabel}</span>
-            {selectedCareer && activeTab !== "finder" && (
-              <>
-                <span aria-hidden="true">/</span>
-                <span className="text-slate-700 truncate max-w-xs">
-                  {selectedCareer.title}
-                </span>
-              </>
+        {/* Desktop topbar: page title, selected career, Home control, real profile */}
+        <div className="sticky top-0 z-10 hidden h-16 items-center justify-between gap-6 border-b border-line bg-surface/90 px-10 backdrop-blur no-print lg:flex">
+          <div className="min-w-0">
+            <p id="app-page-title" className="font-display text-lg font-bold text-ink">
+              {sectionLabel}
+            </p>
+            {selectedCareer && (activeTab === "skill-gap" || activeTab === "roadmap") && (
+              <p className="truncate text-xs text-ink-muted">{selectedCareer.title}</p>
             )}
           </div>
-          <div className="text-xs text-slate-500 whitespace-nowrap">
-            Discover Your Career. Build Your Future.
+          <div className="flex shrink-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={goHome}
+              className="cl-btn cl-btn-ghost px-3 py-2"
+              aria-label="Back to the CareerLens AI home page"
+            >
+              <Home className="h-4 w-4" aria-hidden="true" />
+              Home
+            </button>
+            {profile && (
+              <div className="flex items-center gap-2.5 border-l border-line pl-4">
+                <span
+                  className="flex h-8 w-8 items-center justify-center rounded-pill bg-lavender-soft font-display text-sm font-bold text-primary-strong"
+                  aria-hidden="true"
+                >
+                  {profile.name.trim().charAt(0).toUpperCase()}
+                </span>
+                <span className="max-w-[12rem] truncate text-sm font-semibold text-ink">{profile.name}</span>
+              </div>
+            )}
           </div>
         </div>
 
-        <main className="mx-auto max-w-[1160px] px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
+        <main id="main-content" tabIndex={-1} className="mx-auto max-w-[1160px] px-4 sm:px-6 lg:px-10 py-6 sm:py-8 focus:outline-none">
           {/* Global Error Alert */}
           {errorMessage && (
             <div
               role="alert"
-              className="mb-6 flex items-start justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-800"
+              className="mb-6 flex items-start justify-between gap-3 rounded-card border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-800"
             >
               <div className="flex items-start gap-2.5">
                 <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
@@ -350,11 +419,31 @@ export default function App() {
                 type="button"
                 onClick={() => setErrorMessage(null)}
                 aria-label="Dismiss error"
-                className="rounded-lg p-1 text-red-600 hover:bg-red-100"
+                className="-my-2 -mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-red-600 hover:bg-red-100"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
+          )}
+
+          {activeTab === "dashboard" && (
+            <DashboardOverview
+              profile={profile}
+              careerResults={careerResults}
+              selectedCareer={selectedCareer}
+              skillGapsByCareer={skillGapsByCareer}
+              roadmapsByCareer={roadmapsByCareer}
+              completedStages={completedStages}
+              pending={{
+                careers: loadingCareers,
+                skillGap: loadingSkillGap,
+                roadmap: loadingRoadmap,
+              }}
+              cooldownSeconds={cooldownSeconds}
+              onOpenFeature={handleTabChange}
+              onSkillGap={(career) => handleAnalyzeSkillGap(career, DELIBERATE)}
+              onRoadmap={(career) => handleGenerateRoadmap(career, DELIBERATE)}
+            />
           )}
 
           {activeTab === "finder" && (

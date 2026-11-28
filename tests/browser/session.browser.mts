@@ -1,5 +1,5 @@
 // Real-browser check of D4 (F5) session persistence, via CDP in headless Edge.
-const APP = "http://localhost:3123/";
+const APP = "http://localhost:3123/#/app"; // application view (Landing Page is at "/")
 const page = (await (await fetch("http://127.0.0.1:9333/json/list")).json()).find((t: any) => t.type === "page");
 const ws = new WebSocket(page.webSocketDebuggerUrl);
 await new Promise((r) => (ws.onopen = r));

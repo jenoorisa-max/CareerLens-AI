@@ -1,42 +1,280 @@
 @import "tailwindcss";
 
+/* =============================================================================
+   CareerLens AI design system — foundation (Phase 1)
+
+   Design tokens are defined with Tailwind v4's @theme, so each token is both a
+   CSS variable (e.g. var(--color-primary)) and a utility class (bg-primary,
+   text-ink, border-line, rounded-card, shadow-card, font-display, ease-smooth,
+   max-w-content, text-display, ...).
+
+   Tokens use NEW semantic names on purpose: Tailwind's built-in scales
+   (rounded-xl, shadow-sm, text-sm, ...) are left untouched, so existing pages
+   keep their current layout until they are redesigned.
+
+   Contrast (WCAG 2.x, verified by tests/frontend/design-tokens.test.mts):
+   - ink / ink-muted text: AA on surface, canvas and lavender-soft.
+   - primary: AA for text on surface and canvas; white text on primary is AA.
+   - On lavender-soft backgrounds use primary-strong for text.
+   - lavender (#A78BFA) is decorative only (borders, accents, icons on dark),
+     never for body text on light backgrounds.
+   ========================================================================== */
+
 @theme {
-  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  /* --- Colour palette --- */
+  --color-primary: #7555d9;          /* Primary Purple */
+  --color-primary-strong: #6447c7;   /* hover, text on lavender-soft */
+  --color-primary-deep: #5539b0;     /* active / pressed */
+  --color-lavender: #a78bfa;         /* Lavender (decorative accent) */
+  --color-lavender-soft: #f1ecff;    /* Soft Lavender (tints, highlights) */
+  --color-canvas: #f7f6fb;           /* Background */
+  --color-surface: #ffffff;          /* White (cards, panels) */
+  --color-ink: #17152b;              /* Primary Text */
+  --color-ink-muted: #6b6880;        /* Secondary Text */
+  --color-line: #e8e5f0;             /* Border */
+  --color-focus: #7555d9;            /* focus outline / ring */
+
+  /* --- Typography --- */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Semantic type scale (in addition to Tailwind's text-xs ... text-9xl) */
+  --text-display: clamp(2.25rem, 1.5rem + 3vw, 3.5rem);
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.02em;
+  --text-heading: clamp(1.5rem, 1.2rem + 1.2vw, 2rem);
+  --text-heading--line-height: 1.2;
+  --text-heading--letter-spacing: -0.015em;
+  --text-subheading: 1.125rem;
+  --text-subheading--line-height: 1.4;
+
+  /* --- Radius (semantic; built-in rounded-* unchanged) --- */
+  --radius-control: 0.75rem;   /* 12px: inputs, buttons */
+  --radius-card: 1rem;         /* 16px: cards */
+  --radius-panel: 1.25rem;     /* 20px: large sections */
+  --radius-pill: 9999px;       /* badges, chips */
+
+  /* --- Shadows (soft, low-contrast) --- */
+  --shadow-card: 0 1px 2px rgb(23 21 43 / 0.04), 0 1px 3px rgb(23 21 43 / 0.06);
+  --shadow-card-hover: 0 6px 16px -4px rgb(23 21 43 / 0.1), 0 2px 4px rgb(23 21 43 / 0.04);
+  --shadow-raised: 0 16px 40px -12px rgb(23 21 43 / 0.18);
+  --shadow-focus: 0 0 0 3px rgb(117 85 217 / 0.3);
+
+  /* --- Motion --- */
+  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* --- Layout --- */
+  --container-content: 72.5rem;  /* 1160px: current main content width */
+  --container-reading: 42rem;    /* comfortable reading width (max-w-reading) */
 }
 
+/* Non-utility tokens (plain CSS variables). */
 :root {
-  --bg-canvas: #ffffff;
-  --bg-lavender-soft: #faf8ff;
-  --bg-lavender-tint: #f3eeff;
-  --border-hairline: #e8e1f8;
-  --accent-purple: #5b21b6;
-  --accent-purple-deep: #4c1d95;
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+
+  --space-gutter: clamp(1rem, 0.5rem + 2.5vw, 2.5rem);   /* page side padding */
+  --space-section: clamp(3rem, 2rem + 5vw, 6rem);        /* between page sections */
+  --space-stack: 1.5rem;                                 /* between cards */
 }
 
-html {
-  scroll-behavior: smooth;
-  font-family: var(--font-sans);
-  background-color: var(--bg-canvas);
-  color: #18132a;
+/* =============================================================================
+   Base styles (in the base layer, so utility classes always win)
+   ========================================================================== */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    font-family: var(--font-sans);
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    color: inherit;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Visible keyboard focus everywhere. Elements that style their own focus
+     (e.g. focus:outline-none + ring utilities) override this. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-lavender-soft);
+    color: var(--color-ink);
+  }
 }
 
-body {
-  background-color: var(--bg-canvas);
-  color: #18132a;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* =============================================================================
+   Reusable component classes (foundation for the Landing Page and Dashboard).
+   Prefixed with "cl-" to avoid collisions; not yet used by existing pages.
+   ========================================================================== */
+@layer components {
+  .cl-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+
+  .cl-card-interactive {
+    transition:
+      box-shadow var(--duration-base) var(--ease-smooth),
+      border-color var(--duration-base) var(--ease-smooth),
+      transform var(--duration-base) var(--ease-smooth);
+  }
+  .cl-card-interactive:hover {
+    box-shadow: var(--shadow-card-hover);
+    border-color: color-mix(in srgb, var(--color-lavender) 55%, var(--color-line));
+  }
+
+  .cl-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: var(--radius-control);
+    border: 1px solid transparent;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--duration-fast) var(--ease-smooth),
+      border-color var(--duration-fast) var(--ease-smooth),
+      color var(--duration-fast) var(--ease-smooth),
+      box-shadow var(--duration-fast) var(--ease-smooth);
+  }
+  .cl-btn:disabled,
+  .cl-btn[aria-disabled="true"] {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .cl-btn-primary {
+    background-color: var(--color-primary);
+    color: #ffffff;
+  }
+  .cl-btn-primary:hover:not(:disabled) {
+    background-color: var(--color-primary-strong);
+  }
+  .cl-btn-primary:active:not(:disabled) {
+    background-color: var(--color-primary-deep);
+  }
+
+  .cl-btn-secondary {
+    background-color: var(--color-surface);
+    border-color: var(--color-line);
+    color: var(--color-ink);
+  }
+  .cl-btn-secondary:hover:not(:disabled) {
+    background-color: var(--color-lavender-soft);
+    border-color: var(--color-lavender);
+    color: var(--color-primary-deep);
+  }
+
+  .cl-btn-ghost {
+    background-color: transparent;
+    color: var(--color-ink-muted);
+  }
+  .cl-btn-ghost:hover:not(:disabled) {
+    background-color: var(--color-lavender-soft);
+    color: var(--color-ink);
+  }
+
+  .cl-label {
+    display: block;
+    margin-bottom: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+
+  .cl-input {
+    width: 100%;
+    border-radius: var(--radius-control);
+    border: 1px solid var(--color-line);
+    background-color: var(--color-surface);
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: var(--color-ink);
+    transition:
+      border-color var(--duration-fast) var(--ease-smooth),
+      box-shadow var(--duration-fast) var(--ease-smooth);
+  }
+  .cl-input::placeholder {
+    color: var(--color-ink-muted);
+  }
+  .cl-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-focus);
+  }
+  .cl-input[aria-invalid="true"] {
+    border-color: #dc2626;
+  }
+
+  .cl-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-lavender-soft);
+    padding: 0.25rem 0.625rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-primary-strong);
+  }
+
+  .cl-eyebrow {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--color-primary);
+  }
+
+  .cl-muted {
+    color: var(--color-ink-muted);
+  }
+
+  .cl-container {
+    width: 100%;
+    max-width: var(--container-content);
+    margin-inline: auto;
+    padding-inline: var(--space-gutter);
+  }
 }
 
-h1,
-h2,
-h3,
-h4 {
-  font-family: var(--font-display);
-  text-wrap: balance;
-}
-
+/* =============================================================================
+   Existing utilities and behaviour (unchanged)
+   ========================================================================== */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
@@ -44,16 +282,377 @@ h4 {
 @keyframes enterSlide {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    translate: 0 8px;
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    translate: 0 0;
   }
 }
 
 .animate-enter {
-  animation: enterSlide 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: enterSlide 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* =============================================================================
+   Phase 1 polish: shared motion and micro-interactions. All movement is small
+   (a few px, under 0.4s) and is switched off by prefers-reduced-motion below.
+   ========================================================================== */
+
+@layer components {
+/* Buttons: a 1px press, consistent with every cl-btn variant. */
+.cl-btn {
+  transition:
+    background-color var(--duration-fast) var(--ease-smooth),
+    border-color var(--duration-fast) var(--ease-smooth),
+    color var(--duration-fast) var(--ease-smooth),
+    box-shadow var(--duration-fast) var(--ease-smooth),
+    transform var(--duration-fast) var(--ease-smooth);
+}
+.cl-btn:active:not(:disabled):not([aria-disabled="true"]) {
+  transform: translateY(1px);
+}
+
+/* Interactive cards lift slightly on hover / keyboard focus inside. */
+.cl-card-interactive:hover,
+.cl-card-interactive:focus-within {
+  box-shadow: var(--shadow-card-hover);
+  border-color: color-mix(in srgb, var(--color-lavender) 55%, var(--color-line));
+  transform: translateY(-2px);
+}
+
+/* Staggered entrance for lists of cards (results, stages, dashboard panels). */
+.cl-stagger > * {
+  animation: enterSlide 320ms var(--ease-smooth) both;
+}
+.cl-stagger > :nth-child(2) { animation-delay: 50ms; }
+.cl-stagger > :nth-child(3) { animation-delay: 100ms; }
+.cl-stagger > :nth-child(4) { animation-delay: 150ms; }
+.cl-stagger > :nth-child(5) { animation-delay: 200ms; }
+.cl-stagger > :nth-child(n + 6) { animation-delay: 250ms; }
+
+/* Progress fills: grow in on first render, then ease to each new value. */
+@keyframes clGrow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.cl-progress-fill {
+  transform-origin: left center;
+  transition: width var(--duration-slow) var(--ease-smooth);
+  animation: clGrow 500ms var(--ease-smooth) both;
+}
+
+/* Loading: an indeterminate bar inside loading status cards (decorative). */
+@keyframes clIndeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+.cl-loading-bar {
+  position: relative;
+  height: 3px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-lavender-soft);
+}
+.cl-loading-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: inherit;
+  background-color: var(--color-primary);
+  animation: clIndeterminate 1.4s var(--ease-smooth) infinite;
+}
+
+/* Completion: a small pop when a check icon appears. */
+@keyframes clPop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.cl-pop {
+  animation: clPop 280ms var(--ease-smooth) both;
+}
+
+/* Mobile drawer slides in from the left. */
+@keyframes clDrawerIn {
+  from {
+    transform: translateX(-16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.cl-drawer-in {
+  animation: clDrawerIn 220ms var(--ease-smooth) both;
+}
+}
+
+/* =============================================================================
+   Phase 1 Task 8: depth and atmosphere. Static decoration only (no animation),
+   very light tints so text keeps its contrast (see tests/frontend/visual.test.mts).
+   ========================================================================== */
+@layer components {
+  /* Touch targets: every button and input is at least 44px tall. */
+  .cl-btn,
+  .cl-input {
+    min-height: 2.75rem;
+  }
+
+  /* Primary buttons: a soft sheen and a tinted shadow for depth. */
+  .cl-btn-primary {
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.06), rgb(255 255 255 / 0));
+    box-shadow:
+      0 1px 2px rgb(85 57 176 / 0.22),
+      0 6px 16px -8px rgb(117 85 217 / 0.6);
+  }
+  .cl-btn-primary:hover:not(:disabled) {
+    box-shadow:
+      0 1px 2px rgb(85 57 176 / 0.22),
+      0 10px 22px -10px rgb(117 85 217 / 0.7);
+  }
+
+  /* App background: canvas with two soft ambient glows at the top. */
+  .cl-app-bg {
+    background:
+      radial-gradient(56rem 26rem at 100% -6rem, rgb(167 139 250 / 0.16), transparent 70%),
+      radial-gradient(40rem 22rem at 0% -8rem, rgb(117 85 217 / 0.06), transparent 70%),
+      var(--color-canvas);
+  }
+
+  /* Page header cards: a lavender glow and a faint dot grid in the corner. */
+  .cl-card-hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-color: color-mix(in srgb, var(--color-lavender) 26%, var(--color-line));
+    background:
+      radial-gradient(30rem 15rem at 100% 0%, rgb(167 139 250 / 0.18), transparent 70%),
+      linear-gradient(180deg, #ffffff, #fcfbff);
+  }
+  .cl-card-hero::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: -1;
+    width: 18rem;
+    height: 11rem;
+    pointer-events: none;
+    background-image: radial-gradient(rgb(117 85 217 / 0.2) 1px, transparent 1.4px);
+    background-size: 14px 14px;
+    -webkit-mask-image: radial-gradient(ellipse at top right, #000 10%, transparent 70%);
+    mask-image: radial-gradient(ellipse at top right, #000 10%, transparent 70%);
+  }
+
+  /* Highlighted cards (next step, summaries): a gradient hairline border. */
+  .cl-card-accent {
+    border: 1px solid transparent;
+    background:
+      linear-gradient(160deg, #ffffff 40%, #faf8ff) padding-box,
+      linear-gradient(135deg, rgb(117 85 217 / 0.5), rgb(167 139 250 / 0.28) 45%, var(--color-line) 80%) border-box;
+    box-shadow:
+      0 14px 32px -22px rgb(117 85 217 / 0.45),
+      var(--shadow-card);
+  }
+
+  /* Softly tinted card (call-to-action rows). */
+  .cl-card-tint {
+    border-color: color-mix(in srgb, var(--color-lavender) 32%, var(--color-line));
+    background: linear-gradient(135deg, var(--color-lavender-soft), #ffffff 85%);
+  }
+
+  /* A thin brand gradient along the top edge of a card. */
+  .cl-accent-top {
+    background-image: linear-gradient(90deg, var(--color-primary), var(--color-lavender));
+    background-size: 100% 3px;
+    background-position: top;
+    background-repeat: no-repeat;
+  }
+
+  /* Icon tiles. */
+  .cl-icon-tile {
+    background: linear-gradient(135deg, var(--color-lavender-soft), #ffffff);
+    box-shadow: inset 0 0 0 1px rgb(167 139 250 / 0.35);
+    color: var(--color-primary-strong);
+  }
+  .cl-icon-tile-solid {
+    background: linear-gradient(135deg, var(--color-primary-deep), var(--color-primary));
+    box-shadow: 0 6px 14px -6px rgb(117 85 217 / 0.6);
+    color: #ffffff;
+  }
+
+  /* Gradient headline text (large display text only; contrast >= 3:1). */
+  .cl-text-gradient {
+    background-image: linear-gradient(100deg, var(--color-primary-deep), var(--color-primary) 55%, #8a68ee);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Landing Page sections. */
+  .cl-hero-bg {
+    position: relative;
+    isolation: isolate;
+  }
+  .cl-hero-bg::before,
+  .cl-hero-bg::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+  .cl-hero-bg::before {
+    background:
+      radial-gradient(42rem 24rem at 12% -4rem, rgb(167 139 250 / 0.26), transparent 65%),
+      radial-gradient(38rem 22rem at 92% 4rem, rgb(117 85 217 / 0.14), transparent 65%),
+      linear-gradient(180deg, #fbfaff, var(--color-canvas));
+  }
+  .cl-hero-bg::after {
+    background-image: radial-gradient(rgb(117 85 217 / 0.12) 1px, transparent 1.4px);
+    background-size: 24px 24px;
+    -webkit-mask-image: linear-gradient(180deg, #000, transparent 65%);
+    mask-image: linear-gradient(180deg, #000, transparent 65%);
+  }
+  .cl-section-tint {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-lavender-soft) 70%, var(--color-canvas)),
+      var(--color-canvas)
+    );
+  }
+  .cl-cta-panel {
+    background:
+      radial-gradient(32rem 18rem at 88% -10%, rgb(117 85 217 / 0.55), transparent 70%),
+      radial-gradient(26rem 16rem at 0% 110%, rgb(167 139 250 / 0.22), transparent 70%),
+      var(--color-ink);
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.06),
+      0 24px 48px -28px rgb(23 21 43 / 0.6);
+  }
+
+  /* Sidebar. */
+  .cl-sidebar-bg {
+    background: linear-gradient(180deg, #ffffff 60%, #fbfaff);
+  }
+  .cl-nav-active {
+    background: linear-gradient(90deg, var(--color-lavender-soft), rgb(241 236 255 / 0.45));
+    box-shadow: inset 3px 0 0 var(--color-primary);
+  }
+}
+
+/* =============================================================================
+   Phase 1 Task 9: final motion polish. Small, intentional movement only; all of
+   it is removed under prefers-reduced-motion (see the block below).
+   ========================================================================== */
+@layer components {
+  /* Hero: the preview card enters just after the headline sequence. */
+  .cl-enter-late {
+    animation: enterSlide 520ms var(--ease-smooth) 260ms both;
+  }
+
+  /* Arrow icons in buttons nudge forward on hover. */
+  .cl-btn .lucide-arrow-right {
+    transition: translate var(--duration-base) var(--ease-smooth);
+  }
+  .cl-btn:hover:not(:disabled) .lucide-arrow-right {
+    translate: 3px 0;
+  }
+
+  /* Press feedback for chips, switchers and navigation items. */
+  .cl-press {
+    transition:
+      background-color var(--duration-fast) var(--ease-smooth),
+      border-color var(--duration-fast) var(--ease-smooth),
+      color var(--duration-fast) var(--ease-smooth),
+      box-shadow var(--duration-fast) var(--ease-smooth),
+      scale var(--duration-fast) var(--ease-smooth);
+  }
+  .cl-press:active:not(:disabled) {
+    scale: 0.97;
+  }
+
+  /* Progress fills: a soft highlight along the bar. */
+  .cl-progress-fill {
+    background-image: linear-gradient(90deg, rgb(255 255 255 / 0), rgb(255 255 255 / 0.22));
+  }
+}
+
+/* Landing Page scroll reveal (progressive enhancement). Content is only hidden
+   once JavaScript has armed it (.cl-reveal-on on the page root), on screens, and
+   when motion is allowed. Each element is revealed once and stays visible. */
+@keyframes clReveal {
+  from {
+    opacity: 0;
+    translate: 0 18px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@media screen and (prefers-reduced-motion: no-preference) {
+  .cl-reveal-on .cl-reveal:not(.is-visible),
+  .cl-reveal-on .cl-reveal-group:not(.is-visible) > * {
+    opacity: 0;
+  }
+  .cl-reveal-on .cl-reveal.is-visible,
+  .cl-reveal-on .cl-reveal-group.is-visible > * {
+    animation: clReveal 640ms var(--ease-smooth) both;
+  }
+  .cl-reveal-on .cl-reveal-group.is-visible > :nth-child(2) { animation-delay: 90ms; }
+  .cl-reveal-on .cl-reveal-group.is-visible > :nth-child(3) { animation-delay: 180ms; }
+  .cl-reveal-on .cl-reveal-group.is-visible > :nth-child(n + 4) { animation-delay: 270ms; }
+}
+
+/* High-contrast / forced-colours: drop decorative backgrounds, keep text visible. */
+@media (forced-colors: active) {
+  .cl-text-gradient {
+    color: CanvasText;
+    background: none;
+  }
+  .cl-hero-bg::before,
+  .cl-hero-bg::after,
+  .cl-card-hero::after {
+    display: none;
+  }
+}
+
+/* Skip link: hidden until focused with the keyboard. */
+.cl-skip-link {
+  position: absolute;
+  left: 1rem;
+  top: 0.75rem;
+  z-index: 100;
+  transform: translateY(-200%);
+  border-radius: var(--radius-control);
+  background-color: var(--color-ink);
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+.cl-skip-link:focus {
+  transform: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -62,6 +661,51 @@ h4 {
   }
   .animate-enter {
     animation: none;
+  }
+  .cl-card-interactive,
+  .cl-btn,
+  .cl-input {
+    transition: none;
+  }
+  .cl-stagger > *,
+  .cl-progress-fill,
+  .cl-pop,
+  .cl-drawer-in {
+    animation: none;
+  }
+  .cl-progress-fill {
+    transition: none;
+  }
+  .cl-card-interactive:hover,
+  .cl-card-interactive:focus-within,
+  .cl-btn:active:not(:disabled):not([aria-disabled="true"]) {
+    transform: none;
+  }
+  /* The loading bar becomes a static, partly filled track. */
+  .cl-loading-bar::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.35;
+  }
+  .cl-enter-late {
+    animation: none;
+  }
+  .cl-btn:hover:not(:disabled) .lucide-arrow-right,
+  .cl-press:active:not(:disabled) {
+    translate: none;
+    scale: none;
+  }
+  /* Safety net: nothing animates or transitions, whatever its source. Colour
+     changes still happen, just instantly. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
   }
 }
 

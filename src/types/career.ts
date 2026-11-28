@@ -1,4 +1,4 @@
-export type ActiveTab = "finder" | "skill-gap" | "roadmap";
+export type ActiveTab = "dashboard" | "finder" | "skill-gap" | "roadmap";
 
 export interface StudentProfile {
   name: string;

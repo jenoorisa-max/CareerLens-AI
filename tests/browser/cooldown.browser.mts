@@ -1,6 +1,6 @@
 // Drives headless Edge via the Chrome DevTools Protocol (built-in WebSocket, no deps)
 // to check the D3 cooldown in a real browser.
-const APP = "http://localhost:3123/";
+const APP = "http://localhost:3123/#/app"; // application view (Landing Page is at "/")
 const targets = await (await fetch("http://127.0.0.1:9333/json/list")).json();
 const page = targets.find((t: any) => t.type === "page");
 const ws = new WebSocket(page.webSocketDebuggerUrl);

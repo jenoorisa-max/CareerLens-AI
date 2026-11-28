@@ -19,6 +19,15 @@ const SUITES = [
   "tests/frontend/session.test.mts",             // D4: session persistence, validator move
   "tests/frontend/shared-profile.test.mts",      // D4 follow-up: shared profile validation, stage numbers
   "tests/frontend/form-limits.test.mts",         // Career Finder input limits match the server
+  "tests/frontend/design-tokens.test.mts",       // Phase 1 design tokens, fonts, safe naming, contrast
+  "tests/frontend/landing.test.mts",             // Phase 1 Landing Page content, structure, honesty rules
+  "tests/frontend/dashboard.test.mts",           // Phase 1 Dashboard journey logic and overview (real data only)
+  "tests/frontend/career-finder.test.mts",       // Phase 1 Career Finder structure, states, accessibility
+  "tests/frontend/skill-gap.test.mts",           // Phase 1 Skill Gap Analyzer structure, states, accessibility
+  "tests/frontend/roadmap.test.mts",             // Phase 1 Learning Roadmap stage status, structure, accessibility
+  "tests/frontend/polish.test.mts",              // Phase 1 global polish: motion classes, reduced motion, consistency
+  "tests/frontend/visual.test.mts",              // Phase 1 depth/atmosphere classes, tint contrast, a11y structure
+  "tests/frontend/motion.test.mts",              // Phase 1 final motion polish and complete reduced-motion support
 ];
 
 const env = { ...process.env };

@@ -1,15 +1,19 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  Plus,
-  X,
-  ArrowRight,
-  Loader2,
-  TrendingUp,
-  CheckCircle2,
-  Wand2,
-  Map,
   AlertCircle,
+  ArrowRight,
+  CheckCircle2,
+  Circle,
+  GraduationCap,
+  Loader2,
+  Map,
+  Plus,
   RefreshCw,
+  Sparkles,
+  Target,
+  TrendingUp,
+  Wand2,
+  X,
 } from "lucide-react";
 import type {
   CareerFinderResponse,
@@ -19,6 +23,20 @@ import type {
 import { clampPercent, padNumber } from "../lib/format";
 import { mergeTags, type TagKind } from "../lib/tags";
 import { PROFILE_LIMITS, validateProfile } from "../shared/profile";
+
+/** Maps a validation message (unchanged wording) to the field it is about. */
+function fieldForError(message: string | null): string | null {
+  if (!message) return null;
+  if (/education/i.test(message)) return "education-level";
+  if (/field of study/i.test(message)) return "field-of-study";
+  if (/skill/i.test(message)) return "skills-input";
+  if (/interest/i.test(message)) return "interests-input";
+  if (/goal/i.test(message)) return "career-goals";
+  if (/name/i.test(message)) return "student-name";
+  return null;
+}
+
+const INPUT_CLASS = "cl-input aria-[invalid=true]:border-red-500";
 
 interface CareerFinderProps {
   initialProfile: StudentProfile | null;
@@ -209,318 +227,345 @@ export default function CareerFinder({
     await onSubmitProfile(submission);
   };
 
+
+  // ----- Presentation helpers (no business logic) -----
+  const errorField = fieldForError(validationError);
+  const formErrorRef = useRef<string | null>(null);
+  // Move focus to the field a validation error is about (keyboard and screen readers).
+  useEffect(() => {
+    if (validationError && validationError !== formErrorRef.current) {
+      const id = fieldForError(validationError);
+      if (id) document.getElementById(id)?.focus();
+    }
+    formErrorRef.current = validationError;
+  }, [validationError]);
+
+  const completion = [
+    { label: "Name", done: Boolean(name.trim()) },
+    { label: "Field of study", done: Boolean(fieldOfStudy.trim()) },
+    { label: "Skills", done: skills.length > 0 },
+    { label: "Interests", done: interests.length > 0 },
+    { label: "Career goals", done: Boolean(careerGoals.trim()) },
+  ];
+  const completedCount = completion.filter((c) => c.done).length;
+
+  const fieldError = (id: string) =>
+    errorField === id && validationError ? (
+      <p id={`${id}-error`} role="alert" className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-red-700">
+        <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        {validationError}
+      </p>
+    ) : null;
+  const describedBy = (...ids: Array<string | false | null | undefined>) =>
+    ids.filter(Boolean).join(" ") || undefined;
+
+  const tagSection = (kind: TagKind) => {
+    const isSkill = kind === "skill";
+    const id = isSkill ? "skills-input" : "interests-input";
+    const list = isSkill ? skills : interests;
+    const setList = isSkill ? setSkills : setInterests;
+    const value = isSkill ? skillInput : interestInput;
+    const setValue = isSkill ? setSkillInput : setInterestInput;
+    const quick = isSkill ? QUICK_SKILLS : QUICK_INTERESTS;
+    const tagErr = tagError?.kind === kind ? tagError.message : null;
+    const errId = isSkill ? "skills-error" : "interests-error";
+    const label = isSkill ? "Current Skills" : "Interests & Domains";
+    const add = () => {
+      if (addTags(value, list, setList, kind)) setValue("");
+    };
+    return (
+      <div>
+        <div className="flex items-baseline justify-between gap-2">
+          <label htmlFor={id} className="cl-label mb-0">
+            {label}
+          </label>
+          <span id={`${id}-count`} className="text-xs tabular-nums text-ink-muted">
+            {list.length}/{PROFILE_LIMITS.maxTags}
+          </span>
+        </div>
+        <p id={`${id}-help`} className="mt-0.5 text-xs text-ink-muted">
+          {isSkill
+            ? "Type a skill and press Enter, or separate several with commas."
+            : "Subjects, industries or causes you care about."}
+        </p>
+        <div className="mt-2 flex gap-2">
+          <input
+            id={id}
+            type="text"
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value);
+              if (tagError?.kind === kind) setTagError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                add();
+              }
+            }}
+            aria-invalid={Boolean(tagErr) || errorField === id}
+            aria-describedby={describedBy(`${id}-help`, `${id}-count`, tagErr && errId, errorField === id && `${id}-error`)}
+            placeholder={isSkill ? "Type a skill & press Enter" : "Type an interest & press Enter"}
+            className={`${INPUT_CLASS} min-w-0 flex-1`}
+          />
+          <button type="button" onClick={add} className="cl-btn cl-btn-secondary shrink-0 px-4">
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Add
+          </button>
+        </div>
+
+        {tagErr && (
+          <p id={errId} role="alert" className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-red-700">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            {tagErr}
+          </p>
+        )}
+        {fieldError(id)}
+
+        {list.length > 0 && (
+          <ul className="mt-3 flex flex-wrap gap-2" aria-label={isSkill ? "Added skills" : "Added interests"}>
+            {list.map((tag, idx) => (
+              <li key={tag}>
+                <button
+                  type="button"
+                  onClick={() => removeTag(idx, list, setList)}
+                  aria-label={`Remove ${kind} ${tag}`}
+                  className="cl-press inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-pill bg-lavender-soft px-3 py-1.5 text-xs font-semibold text-primary-deep hover:bg-lavender/25"
+                >
+                  <span className="truncate">{tag}</span>
+                  <X className="h-3 w-3 shrink-0 opacity-70" aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-ink-muted">Suggestions:</span>
+          {quick
+            .filter((q) => !list.some((s) => s.toLowerCase() === q.toLowerCase()))
+            .slice(0, 5)
+            .map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => addTags(q, list, setList, kind)}
+                className="cl-press min-h-9 rounded-pill border border-line bg-surface px-3 py-1 text-xs font-medium text-ink-muted hover:border-lavender hover:text-primary-deep"
+              >
+                + {q}
+              </button>
+            ))}
+        </div>
+      </div>
+    );
+  };
+
+  const sectionHeading = (n: number, title: string, text: string) => (
+    <div className="flex items-start gap-3">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-pill bg-lavender-soft font-mono text-xs font-semibold text-primary-strong" aria-hidden="true">
+        {n}
+      </span>
+      <div>
+        <h3 className="font-display text-base font-bold text-ink">{title}</h3>
+        <p className="text-sm text-ink-muted">{text}</p>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="space-y-8 animate-enter">
-      {/* Hero Banner */}
-      <section className="rounded-2xl border border-[#E8E1F8] bg-[#FAF8FF] p-6 sm:p-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          <div className="max-w-2xl space-y-2.5">
-            <p className="text-xs font-semibold text-[#5B21B6]">
-              CareerLens AI · Guided Student Assessment
-            </p>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#18132A]">
-              Discover Your Career.{" "}
-              <span className="text-[#5B21B6]">Build Your Future.</span>
-            </h1>
-            <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
-              Enter your academic background, current skills, and ambitions.
-              Gemini evaluates your profile to recommend 3 tailored career
-              paths, assess your skill gaps, and map out a beginner-friendly
-              learning plan.
+    <div className="space-y-6 animate-enter">
+      {/* Page header */}
+      <section className="cl-card cl-card-hero p-6 sm:p-8">
+        <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+          <div className="max-w-2xl">
+            <p className="cl-eyebrow">Career Finder</p>
+            <h1 className="mt-2 text-heading font-bold text-ink">Find career paths that fit you</h1>
+            <p className="mt-2 text-ink-muted">
+              Tell CareerLens AI about your studies, skills, interests and goals. Google Gemini uses your profile to
+              recommend three tailored career paths you can then analyze and plan for.
             </p>
           </div>
           <button
             type="button"
             onClick={handleFillSample}
             disabled={isLoading}
-            className="self-start md:self-center inline-flex items-center gap-2 rounded-xl border border-[#DDD3F6] bg-white px-4 py-2.5 text-xs font-semibold text-[#4C1D95] hover:bg-[#F3EEFF] transition-colors whitespace-nowrap shrink-0 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5B21B6]"
+            className="cl-btn cl-btn-secondary shrink-0 self-start"
           >
-            <Wand2 className="h-3.5 w-3.5 text-[#5B21B6]" />
+            <Wand2 className="h-4 w-4 text-primary" aria-hidden="true" />
             Try Sample Profile
           </button>
         </div>
-      </section>
 
-      {/* Profile Input Form */}
-      <section className="rounded-2xl border border-[#E8E1F8] bg-white p-6 sm:p-8">
-        <div className="pb-5 border-b border-[#EFEAF9]">
-          <h2 className="text-lg font-bold text-[#18132A]">
-            01. Your Student Profile
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Provide specific details about your studies, skills, and goals for
-            more accurate recommendations.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="mt-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div>
-              <label
-                htmlFor="student-name"
-                className="block text-xs font-semibold text-slate-700 mb-1.5"
-              >
-                Full Name
-              </label>
-              <input
-                id="student-name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                maxLength={PROFILE_LIMITS.name}
-                placeholder="e.g., Alex Morgan"
-                className="w-full rounded-xl border border-[#E2DAF5] bg-[#FAF8FF]/60 px-4 py-2.5 text-sm text-[#18132A] placeholder:text-slate-400 focus:border-[#5B21B6] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B21B6]/20 transition"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="education-level"
-                className="block text-xs font-semibold text-slate-700 mb-1.5"
-              >
-                Education Level
-              </label>
-              <select
-                id="education-level"
-                value={educationLevel}
-                onChange={(e) => setEducationLevel(e.target.value)}
-                className="w-full rounded-xl border border-[#E2DAF5] bg-[#FAF8FF]/60 px-4 py-2.5 text-sm text-[#18132A] focus:border-[#5B21B6] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B21B6]/20 transition"
-              >
-                {EDUCATION_LEVELS.map((level) => (
-                  <option key={level} value={level}>
-                    {level}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="field-of-study"
-                className="block text-xs font-semibold text-slate-700 mb-1.5"
-              >
-                Field of Study
-              </label>
-              <input
-                id="field-of-study"
-                type="text"
-                value={fieldOfStudy}
-                onChange={(e) => setFieldOfStudy(e.target.value)}
-                maxLength={PROFILE_LIMITS.fieldOfStudy}
-                placeholder="e.g., Computer Science, Economics, Biology"
-                className="w-full rounded-xl border border-[#E2DAF5] bg-[#FAF8FF]/60 px-4 py-2.5 text-sm text-[#18132A] placeholder:text-slate-400 focus:border-[#5B21B6] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B21B6]/20 transition"
-              />
-            </div>
+        {/* Profile completeness (from the form itself) */}
+        <div className="mt-6 rounded-control border border-line bg-canvas p-4">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="font-semibold text-ink">Your profile</span>
+            <span className="tabular-nums text-ink-muted">
+              {completedCount} of {completion.length} complete
+            </span>
           </div>
-
-          {/* Skills & Interests */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-            {/* Current Skills */}
-            <div className="space-y-3">
-              <label
-                htmlFor="skills-input"
-                className="block text-xs font-semibold text-slate-700"
-              >
-                Current Skills
-              </label>
-              <div className="flex gap-2">
-                <input
-                  id="skills-input"
-                  type="text"
-                  value={skillInput}
-                  onChange={(e) => {
-                    setSkillInput(e.target.value);
-                    if (tagError?.kind === "skill") setTagError(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      if (addTags(skillInput, skills, setSkills, "skill")) setSkillInput("");
-                    }
-                  }}
-                  aria-invalid={tagError?.kind === "skill"}
-                  aria-describedby={tagError?.kind === "skill" ? "skills-error" : undefined}
-                  placeholder="Type a skill & press Enter"
-                  className="flex-1 min-w-0 rounded-xl border border-[#E2DAF5] bg-[#FAF8FF]/60 px-4 py-2.5 text-sm text-[#18132A] placeholder:text-slate-400 focus:border-[#5B21B6] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B21B6]/20 transition"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (addTags(skillInput, skills, setSkills, "skill")) setSkillInput("");
-                  }}
-                  className="inline-flex items-center gap-1 rounded-xl bg-[#F3EEFF] px-4 py-2.5 text-xs font-semibold text-[#4C1D95] hover:bg-[#E7DDFC] transition-colors whitespace-nowrap shrink-0"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add
-                </button>
-              </div>
-
-              {tagError?.kind === "skill" && (
-                <p id="skills-error" role="alert" className="text-xs font-medium text-red-700">
-                  {tagError.message}
-                </p>
-              )}
-
-              {skills.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {skills.map((skill, idx) => (
-                    <button
-                      key={skill}
-                      type="button"
-                      onClick={() => removeTag(idx, skills, setSkills)}
-                      aria-label={`Remove skill ${skill}`}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#F3EEFF] px-3 py-1.5 text-xs font-semibold text-[#4C1D95] hover:bg-[#E7DDFC] transition-colors whitespace-nowrap"
-                    >
-                      <span>{skill}</span>
-                      <X className="h-3 w-3 opacity-70" />
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                <span className="text-xs text-slate-400">Suggestions:</span>
-                {QUICK_SKILLS.filter(
-                  (q) => !skills.some((s) => s.toLowerCase() === q.toLowerCase())
-                )
-                  .slice(0, 5)
-                  .map((q) => (
-                    <button
-                      key={q}
-                      type="button"
-                      onClick={() => addTags(q, skills, setSkills, "skill")}
-                      className="rounded-lg border border-[#E8E1F8] bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-[#5B21B6] hover:text-[#4C1D95] transition-colors whitespace-nowrap"
-                    >
-                      + {q}
-                    </button>
-                  ))}
-              </div>
-            </div>
-
-            {/* Interests */}
-            <div className="space-y-3">
-              <label
-                htmlFor="interests-input"
-                className="block text-xs font-semibold text-slate-700"
-              >
-                Interests &amp; Domains
-              </label>
-              <div className="flex gap-2">
-                <input
-                  id="interests-input"
-                  type="text"
-                  value={interestInput}
-                  onChange={(e) => {
-                    setInterestInput(e.target.value);
-                    if (tagError?.kind === "interest") setTagError(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      if (addTags(interestInput, interests, setInterests, "interest")) setInterestInput("");
-                    }
-                  }}
-                  aria-invalid={tagError?.kind === "interest"}
-                  aria-describedby={tagError?.kind === "interest" ? "interests-error" : undefined}
-                  placeholder="Type an interest & press Enter"
-                  className="flex-1 min-w-0 rounded-xl border border-[#E2DAF5] bg-[#FAF8FF]/60 px-4 py-2.5 text-sm text-[#18132A] placeholder:text-slate-400 focus:border-[#5B21B6] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B21B6]/20 transition"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (addTags(interestInput, interests, setInterests, "interest")) setInterestInput("");
-                  }}
-                  className="inline-flex items-center gap-1 rounded-xl bg-[#F3EEFF] px-4 py-2.5 text-xs font-semibold text-[#4C1D95] hover:bg-[#E7DDFC] transition-colors whitespace-nowrap shrink-0"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add
-                </button>
-              </div>
-
-              {tagError?.kind === "interest" && (
-                <p id="interests-error" role="alert" className="text-xs font-medium text-red-700">
-                  {tagError.message}
-                </p>
-              )}
-
-              {interests.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {interests.map((interest, idx) => (
-                    <button
-                      key={interest}
-                      type="button"
-                      onClick={() => removeTag(idx, interests, setInterests)}
-                      aria-label={`Remove interest ${interest}`}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#EFE8FF] px-3 py-1.5 text-xs font-semibold text-[#4C1D95] hover:bg-[#E2D6FC] transition-colors whitespace-nowrap"
-                    >
-                      <span>{interest}</span>
-                      <X className="h-3 w-3 opacity-70" />
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                <span className="text-xs text-slate-400">Suggestions:</span>
-                {QUICK_INTERESTS.filter(
-                  (q) =>
-                    !interests.some((i) => i.toLowerCase() === q.toLowerCase())
-                )
-                  .slice(0, 5)
-                  .map((q) => (
-                    <button
-                      key={q}
-                      type="button"
-                      onClick={() => addTags(q, interests, setInterests, "interest")}
-                      className="rounded-lg border border-[#E8E1F8] bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-[#5B21B6] hover:text-[#4C1D95] transition-colors whitespace-nowrap"
-                    >
-                      + {q}
-                    </button>
-                  ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Career Goals */}
-          <div>
-            <label
-              htmlFor="career-goals"
-              className="block text-xs font-semibold text-slate-700 mb-1.5"
-            >
-              Career Goals
-            </label>
-            <textarea
-              id="career-goals"
-              rows={3}
-              value={careerGoals}
-              onChange={(e) => setCareerGoals(e.target.value)}
-              maxLength={PROFILE_LIMITS.careerGoals}
-              placeholder="What kind of work environment, impact, or role are you hoping to build toward?"
-              className="w-full rounded-xl border border-[#E2DAF5] bg-[#FAF8FF]/60 px-4 py-3 text-sm text-[#18132A] placeholder:text-slate-400 focus:border-[#5B21B6] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B21B6]/20 transition"
+          <div
+            className="mt-2 h-1.5 overflow-hidden rounded-pill bg-lavender-soft"
+            role="progressbar"
+            aria-label="Profile completeness"
+            aria-valuemin={0}
+            aria-valuemax={completion.length}
+            aria-valuenow={completedCount}
+          >
+            <div
+              className="cl-progress-fill h-full rounded-pill bg-primary"
+              style={{ width: `${(completedCount / completion.length) * 100}%` }}
             />
           </div>
+          <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+            {completion.map((item) => (
+              <li key={item.label} className={`flex items-center gap-1.5 text-xs ${item.done ? "text-ink" : "text-ink-muted"}`}>
+                {item.done ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                ) : (
+                  <Circle className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+                {item.label}
+                <span className="sr-only">{item.done ? "(done)" : "(to do)"}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
 
-          {validationError && (
-            <div
-              role="alert"
-              className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
-            >
+      {/* Profile form */}
+      <section className="cl-card p-6 sm:p-8" aria-labelledby="profile-form-title">
+        <h2 id="profile-form-title" className="font-display text-lg font-bold text-ink">
+          Your Student Profile
+        </h2>
+        <p className="mt-1 text-sm text-ink-muted">
+          Specific details lead to more accurate recommendations. All fields are required.
+        </p>
+
+        <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-8">
+          {/* 1. About you */}
+          <fieldset className="space-y-5">
+            <legend className="sr-only">About you</legend>
+            {sectionHeading(1, "About you", "Your name and what you are studying.")}
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+              <div>
+                <label htmlFor="student-name" className="cl-label">
+                  Full Name
+                </label>
+                <input
+                  id="student-name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  maxLength={PROFILE_LIMITS.name}
+                  autoComplete="name"
+                  placeholder="e.g., Alex Morgan"
+                  aria-invalid={errorField === "student-name"}
+                  aria-describedby={describedBy(errorField === "student-name" && "student-name-error")}
+                  className={INPUT_CLASS}
+                />
+                {fieldError("student-name")}
+              </div>
+
+              <div>
+                <label htmlFor="education-level" className="cl-label">
+                  Education Level
+                </label>
+                <select
+                  id="education-level"
+                  value={educationLevel}
+                  onChange={(e) => setEducationLevel(e.target.value)}
+                  aria-invalid={errorField === "education-level"}
+                  aria-describedby={describedBy(errorField === "education-level" && "education-level-error")}
+                  className={INPUT_CLASS}
+                >
+                  {EDUCATION_LEVELS.map((level) => (
+                    <option key={level} value={level}>
+                      {level}
+                    </option>
+                  ))}
+                </select>
+                {fieldError("education-level")}
+              </div>
+
+              <div>
+                <label htmlFor="field-of-study" className="cl-label">
+                  Field of Study
+                </label>
+                <input
+                  id="field-of-study"
+                  type="text"
+                  value={fieldOfStudy}
+                  onChange={(e) => setFieldOfStudy(e.target.value)}
+                  maxLength={PROFILE_LIMITS.fieldOfStudy}
+                  placeholder="e.g., Computer Science, Economics, Biology"
+                  aria-invalid={errorField === "field-of-study"}
+                  aria-describedby={describedBy(errorField === "field-of-study" && "field-of-study-error")}
+                  className={INPUT_CLASS}
+                />
+                {fieldError("field-of-study")}
+              </div>
+            </div>
+          </fieldset>
+
+          {/* 2. Skills & interests */}
+          <fieldset className="space-y-5 border-t border-line pt-8">
+            <legend className="sr-only">Skills and interests</legend>
+            {sectionHeading(2, "Skills & interests", "What you can already do and what you enjoy.")}
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              {tagSection("skill")}
+              {tagSection("interest")}
+            </div>
+          </fieldset>
+
+          {/* 3. Career goals */}
+          <fieldset className="space-y-5 border-t border-line pt-8">
+            <legend className="sr-only">Career goals</legend>
+            {sectionHeading(3, "Career goals", "The kind of work, impact or role you are aiming for.")}
+            <div>
+              <div className="flex items-baseline justify-between gap-2">
+                <label htmlFor="career-goals" className="cl-label mb-0">
+                  Career Goals
+                </label>
+                <span id="career-goals-count" className="text-xs tabular-nums text-ink-muted">
+                  {careerGoals.length.toLocaleString()}/{PROFILE_LIMITS.careerGoals.toLocaleString()}
+                </span>
+              </div>
+              <textarea
+                id="career-goals"
+                rows={4}
+                value={careerGoals}
+                onChange={(e) => setCareerGoals(e.target.value)}
+                maxLength={PROFILE_LIMITS.careerGoals}
+                placeholder="What kind of work environment, impact, or role are you hoping to build toward?"
+                aria-invalid={errorField === "career-goals"}
+                aria-describedby={describedBy("career-goals-count", errorField === "career-goals" && "career-goals-error")}
+                className={`${INPUT_CLASS} mt-2 resize-y`}
+              />
+              {fieldError("career-goals")}
+            </div>
+          </fieldset>
+
+          {validationError && !errorField && (
+            <div role="alert" className="flex items-start gap-2 rounded-control border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               {validationError}
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-[#EFEAF9]">
-            <p className="text-xs text-slate-500">
-              Analyzed live via Gemini AI to produce personalized career paths.
+          <div className="flex flex-col gap-4 border-t border-line pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <p className="flex items-start gap-2 text-xs text-ink-muted">
+              <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+              Your profile is analyzed by Google Gemini. It is not saved to an account.
             </p>
             <button
               type="submit"
               disabled={isLoading || cooldownSeconds > 0}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#5B21B6] px-6 py-3 text-sm font-semibold text-white hover:bg-[#4C1D95] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5B21B6]/50 transition-colors whitespace-nowrap shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="cl-btn cl-btn-primary shrink-0 px-6 py-3"
             >
               {isLoading ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
                   Analyzing Profile...
                 </>
               ) : cooldownSeconds > 0 ? (
@@ -528,7 +573,7 @@ export default function CareerFinder({
               ) : (
                 <>
                   <span>Find 3 Career Paths</span>
-                  <ArrowRight className="h-4 w-4" />
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </>
               )}
             </button>
@@ -536,56 +581,56 @@ export default function CareerFinder({
         </form>
       </section>
 
-      {/* Loading Skeleton */}
+      {/* Loading */}
       {isLoading && (
-        <section className="space-y-4">
-          <div className="rounded-2xl border border-[#E8E1F8] bg-[#FAF8FF] p-5 flex items-center gap-3">
-            <Loader2 className="h-5 w-5 animate-spin text-[#5B21B6] shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-[#18132A]">
-                CareerLens AI is evaluating your education, skills, and goals...
-              </p>
-              <p className="text-xs text-slate-600">
-                Matching your background against tailored career trajectories.
-              </p>
+        <section className="space-y-4" aria-busy="true">
+          <div role="status" className="cl-card p-5">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 shrink-0 text-primary motion-safe:animate-spin" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-semibold text-ink">
+                  CareerLens AI is evaluating your education, skills, and goals...
+                </p>
+                <p className="text-xs text-ink-muted">Matching your background against tailored career trajectories.</p>
+              </div>
             </div>
+            <div className="cl-loading-bar mt-4" aria-hidden="true" />
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3" aria-hidden="true">
             {[1, 2, 3].map((item) => (
-              <div
-                key={item}
-                className="h-96 rounded-2xl border border-[#E8E1F8] bg-white p-6 animate-pulse space-y-4"
-              >
-                <div className="h-4 w-28 rounded bg-[#F3EEFF]" />
-                <div className="h-6 w-3/4 rounded bg-[#F3EEFF]" />
-                <div className="h-20 w-full rounded bg-[#FAF8FF]" />
-                <div className="h-28 w-full rounded bg-[#FAF8FF]" />
+              <div key={item} className="cl-card h-80 space-y-4 p-6 motion-safe:animate-pulse">
+                <div className="h-4 w-28 rounded-pill bg-lavender-soft" />
+                <div className="h-6 w-3/4 rounded-pill bg-lavender-soft" />
+                <div className="h-16 w-full rounded-control bg-canvas" />
+                <div className="h-24 w-full rounded-control bg-canvas" />
               </div>
             ))}
           </div>
         </section>
       )}
 
-      {/* Failed Search: the new details were not analyzed. Any results below
+      {/* Failed search: the new details were not analyzed. Any results below
           belong to the previous assessment and are labelled as such. */}
       {!isLoading && searchFailure && (
         <section
           role="alert"
-          className="rounded-2xl border border-[#E8E1F8] bg-[#FAF8FF] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+          className="cl-card flex flex-col gap-4 border-red-200 p-5 sm:flex-row sm:items-center sm:justify-between"
         >
           <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-[#5B21B6] shrink-0 mt-0.5" />
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-red-50 text-red-600">
+              <AlertCircle className="h-5 w-5" aria-hidden="true" />
+            </span>
             <div>
-              <p className="text-sm font-semibold text-[#18132A]">
+              <p className="text-sm font-semibold text-ink">
                 We couldn&apos;t generate career paths for your updated details.
               </p>
-              <p className="mt-0.5 text-xs text-slate-600 leading-relaxed">
+              <p className="mt-0.5 text-sm leading-relaxed text-ink-muted">
                 {searchFailure.message}
                 {careerResults && resultsProfile && (
                   <>
                     {" "}
                     The results below are from your previous assessment for{" "}
-                    <span className="font-semibold">{resultsProfile.name}</span> (
+                    <span className="font-semibold text-ink">{resultsProfile.name}</span> (
                     {resultsProfile.fieldOfStudy}).
                   </>
                 )}
@@ -597,144 +642,145 @@ export default function CareerFinder({
               type="button"
               onClick={onRetrySearch}
               disabled={cooldownSeconds > 0}
-              className="self-start sm:self-center inline-flex items-center gap-2 rounded-xl border border-[#DDD3F6] bg-white px-4 py-2.5 text-xs font-semibold text-[#4C1D95] hover:bg-[#F3EEFF] transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5B21B6] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="cl-btn cl-btn-secondary shrink-0 self-start sm:self-center"
             >
-              <RefreshCw className="h-3.5 w-3.5" />
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
               {cooldownSeconds > 0 ? `Try again in ${cooldownSeconds}s` : "Try again"}
             </button>
           )}
         </section>
       )}
 
-      {/* Recommended Careers Output */}
+      {/* Results */}
       {!isLoading && careerResults && (
-        <section className="space-y-6 animate-enter">
-          <div className="rounded-2xl border border-[#E8E1F8] bg-[#FAF8FF] p-6">
-            <div className="flex items-start gap-3">
-              <CheckCircle2 className="h-5 w-5 text-[#5B21B6] shrink-0 mt-0.5" />
+        <section className="space-y-6 animate-enter" aria-labelledby="career-results-title">
+          <div className="cl-card cl-card-accent p-6">
+            <div className="flex items-start gap-4">
+              <span className="cl-icon-tile-solid flex h-10 w-10 shrink-0 items-center justify-center rounded-control">
+                <GraduationCap className="h-5 w-5" aria-hidden="true" />
+              </span>
               <div>
-                <h3 className="text-base font-bold text-[#18132A]">
-                  Profile Synthesis
-                </h3>
+                <h2 className="font-display text-base font-bold text-ink">Profile Synthesis</h2>
                 {resultsProfile && (
-                  <p className="text-xs font-medium text-slate-500">
+                  <p className="text-xs font-medium text-ink-muted">
                     For {resultsProfile.name} · {resultsProfile.fieldOfStudy}
                   </p>
                 )}
-                <p className="mt-1 text-sm text-slate-700 leading-relaxed">
-                  {careerResults.profileSummary}
-                </p>
+                <p className="mt-2 text-sm leading-relaxed text-ink">{careerResults.profileSummary}</p>
               </div>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
-            <div>
-              <h3 className="text-xl font-bold text-[#18132A]">
-                3 Recommended Career Paths
-              </h3>
-              <p className="text-sm text-slate-500">
-                Inspect your skill gap or generate a step-by-step learning
-                roadmap for any match.
-              </p>
-            </div>
+          <div>
+            <h2 id="career-results-title" className="text-heading font-bold text-ink">
+              3 Recommended Career Paths
+            </h2>
+            <p className="mt-1 text-sm text-ink-muted">
+              Inspect your skill gap or generate a step-by-step learning roadmap for any match.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {careerResults.careers.map((career, index) => (
-              <article
-                key={`${index}-${career.id || career.title}`}
-                className="flex flex-col justify-between rounded-2xl border border-[#E8E1F8] bg-white p-6 hover:border-[#C5B3F0] transition-colors duration-150"
-              >
-                <div className="space-y-4">
-                  {/* Unboxed Typographic Metadata Header */}
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-mono tabular-nums font-semibold text-slate-500">
-                      {padNumber(index + 1)} · Career Match
-                    </span>
-                    <span className="font-mono tabular-nums font-bold text-[#5B21B6]">
-                      {clampPercent(career.matchScore)}% Fit
-                    </span>
-                  </div>
+          <ul className="cl-stagger grid grid-cols-1 gap-6 lg:grid-cols-3">
+            {careerResults.careers.map((career, index) => {
+              const fit = clampPercent(career.matchScore);
+              return (
+                <li key={`${index}-${career.id || career.title}`} className="flex">
+                  <article
+                    className="cl-card cl-card-interactive cl-accent-top flex w-full flex-col p-6"
+                    aria-labelledby={`career-${index}-title`}
+                  >
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <span className="font-mono font-semibold tabular-nums text-ink-muted">
+                        {padNumber(index + 1)} · Career Match
+                      </span>
+                      <span className="cl-badge font-mono tabular-nums">{fit}% Fit</span>
+                    </div>
+                    <div
+                      className="mt-3 h-1.5 overflow-hidden rounded-pill bg-lavender-soft"
+                      role="progressbar"
+                      aria-label={`Match for ${career.title}`}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={fit}
+                    >
+                      <div className="cl-progress-fill h-full rounded-pill bg-primary" style={{ width: `${fit}%` }} />
+                    </div>
 
-                  <div>
-                    <h4 className="text-lg font-extrabold text-[#18132A]">
+                    <h3 id={`career-${index}-title`} className="mt-5 font-display text-lg font-extrabold text-ink">
                       {career.title}
-                    </h4>
-                    <p className="mt-1 text-xs font-semibold text-[#5B21B6]">
-                      {career.tagline}
-                    </p>
-                  </div>
+                    </h3>
+                    <p className="mt-1 text-sm font-semibold text-primary">{career.tagline}</p>
+                    <p className="mt-3 text-sm leading-relaxed text-ink-muted">{career.explanation}</p>
 
-                  <p className="text-sm text-slate-600 leading-relaxed">
-                    {career.explanation}
-                  </p>
+                    <div className="mt-5 space-y-4 border-t border-line pt-5">
+                      <div>
+                        <h4 className="flex items-center gap-1.5 text-xs font-bold text-ink">
+                          <Target className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                          Why It Fits Your Profile
+                        </h4>
+                        <p className="mt-1 text-sm leading-relaxed text-ink-muted">{career.whyItFitsProfile}</p>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-ink">Day-to-Day Responsibilities</h4>
+                        <ul className="mt-2 space-y-1.5">
+                          {career.dayToDay.map((item, itemIndex) => (
+                            <li key={`${itemIndex}-${item}`} className="flex items-start gap-2 text-sm leading-relaxed text-ink-muted">
+                              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-pill bg-primary" aria-hidden="true" />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-ink">Core Skills</h4>
+                        <ul className="mt-2 flex flex-wrap gap-1.5">
+                          {career.coreSkills.map((skill, skillIndex) => (
+                            <li
+                              key={`${skillIndex}-${skill}`}
+                              className="rounded-pill border border-line bg-canvas px-2.5 py-0.5 text-xs font-medium text-ink"
+                            >
+                              {skill}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <p className="flex items-start gap-2 rounded-control bg-canvas p-3 text-sm text-ink-muted">
+                        <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                        <span>{career.growthOutlook}</span>
+                      </p>
+                    </div>
 
-                  {/* Hairline-separated section instead of nested cards */}
-                  <div className="pt-4 border-t border-[#EFEAF9]">
-                    <p className="text-xs font-bold text-[#18132A] mb-1">
-                      Why It Fits Your Profile
-                    </p>
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      {career.whyItFitsProfile}
-                    </p>
-                  </div>
-
-                  <div className="pt-4 border-t border-[#EFEAF9]">
-                    <p className="text-xs font-bold text-[#18132A] mb-2">
-                      Day-to-Day Responsibilities
-                    </p>
-                    <ul className="space-y-1.5">
-                      {career.dayToDay.map((item, itemIndex) => (
-                        <li
-                          key={`${itemIndex}-${item}`}
-                          className="flex items-start gap-2 text-xs text-slate-600 leading-relaxed"
-                        >
-                          <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[#5B21B6] shrink-0" />
-                          <span>{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="pt-4 border-t border-[#EFEAF9]">
-                    <p className="text-xs font-bold text-[#18132A] mb-1.5">
-                      Core Skills
-                    </p>
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      {career.coreSkills.join(" · ")}
-                    </p>
-                  </div>
-
-                  <div className="pt-4 border-t border-[#EFEAF9] flex items-start gap-2 text-xs text-slate-600">
-                    <TrendingUp className="h-4 w-4 text-[#5B21B6] shrink-0 mt-0.5" />
-                    <span>{career.growthOutlook}</span>
-                  </div>
-                </div>
-
-                <div className="mt-6 pt-4 border-t border-[#EFEAF9] flex flex-col gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => onSelectForSkillGap(career)}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#5B21B6] px-4 py-2.5 text-xs font-semibold text-white hover:bg-[#4C1D95] transition-colors whitespace-nowrap"
-                  >
-                    <span>Analyze Skill Gap</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onSelectForRoadmap(career)}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-[#DDD3F6] bg-white px-4 py-2.5 text-xs font-semibold text-[#4C1D95] hover:bg-[#FAF8FF] transition-colors whitespace-nowrap"
-                  >
-                    <Map className="h-3.5 w-3.5" />
-                    <span>Build Learning Roadmap</span>
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
+                    <div className="mt-auto flex flex-col gap-2.5 pt-6">
+                      <button
+                        type="button"
+                        onClick={() => onSelectForSkillGap(career)}
+                        className="cl-btn cl-btn-primary w-full"
+                        aria-label={`Analyze Skill Gap for ${career.title}`}
+                      >
+                        <span>Analyze Skill Gap</span>
+                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSelectForRoadmap(career)}
+                        className="cl-btn cl-btn-secondary w-full"
+                        aria-label={`Build Learning Roadmap for ${career.title}`}
+                      >
+                        <Map className="h-4 w-4" aria-hidden="true" />
+                        <span>Build Learning Roadmap</span>
+                      </button>
+                    </div>
+                  </article>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       )}
+      {/* Announces new results to screen readers (empty while loading). */}
+      <p className="sr-only" aria-live="polite">
+        {!isLoading && careerResults ? `${careerResults.careers.length} career paths are ready.` : ""}
+      </p>
     </div>
   );
 }

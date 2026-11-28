@@ -21,7 +21,7 @@ const VERSION = 1;
 export const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 /** Tolerance for a savedAt slightly in the future (clock adjustments). */
 const CLOCK_SKEW_MS = 60_000;
-const TABS: ActiveTab[] = ["finder", "skill-gap", "roadmap"];
+const TABS: ActiveTab[] = ["dashboard", "finder", "skill-gap", "roadmap"];
 
 export interface PersistedSession {
   profile: StudentProfile;

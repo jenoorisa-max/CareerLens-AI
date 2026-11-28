@@ -1,7 +1,7 @@
 // Real-browser check of the Career Finder input limits (headless Edge/Chrome via CDP).
 // Uses Input.insertText, which behaves like real typing/pasting, so the browser's
 // own maxlength enforcement is exercised.
-const APP = "http://localhost:3123/";
+const APP = "http://localhost:3123/#/app"; // application view (Landing Page is at "/")
 const page = (await (await fetch("http://127.0.0.1:9333/json/list")).json()).find((t: any) => t.type === "page");
 const ws = new WebSocket(page.webSocketDebuggerUrl);
 await new Promise((r) => (ws.onopen = r));

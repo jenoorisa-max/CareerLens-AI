@@ -16,6 +16,17 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 globalThis.fetch = (async (url: any, init?: any) => {
   if (!String(url).includes("generativelanguage.googleapis.com")) return realFetch(url, init);
   const body = String(init?.body ?? "");
+  // Optional test knobs (unset = previous behaviour):
+  // MOCK_DELAY_MS delays every response (to observe loading states);
+  // MOCK_CAREERS_STATUS makes the career search fail with that HTTP status.
+  const delay = Number(process.env.MOCK_DELAY_MS || 0);
+  if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+  const isCareers = !body.includes("Skill Gap Analysis") && !body.includes("Learning Roadmap");
+  if (isCareers && process.env.MOCK_CAREERS_STATUS) {
+    const status = Number(process.env.MOCK_CAREERS_STATUS);
+    console.log(`[mock] careers -> ${status}`);
+    return json({ error: { code: status, message: "Mock failure", status: "INVALID_ARGUMENT" } }, status);
+  }
   if (body.includes("Skill Gap Analysis") && process.env.MOCK_SKILLGAP !== "ok") {
     console.log("[mock] skill-gap -> 503");
     return json({ error: { code: 503, message: "The model is overloaded", status: "UNAVAILABLE" } }, 503);
