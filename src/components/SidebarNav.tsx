@@ -3,6 +3,7 @@ import {
   BarChart3,
   CheckCircle2,
   Compass,
+  FileText,
   LayoutDashboard,
   Map,
   Menu,
@@ -116,6 +117,7 @@ export default function SidebarNav({
       status: hasRoadmap ? "Ready" : "Step 3",
       completed: hasRoadmap,
     },
+    { id: "cv", label: "CV Analyzer", subtitle: "Score & improve your CV", icon: FileText },
   ];
 
   // Mobile drawer (modal): focus moves into it on open and stays inside it

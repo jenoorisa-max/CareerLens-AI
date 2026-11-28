@@ -102,6 +102,7 @@ const ok9 = await runCheck("Learning Roadmap flow (responses delayed 1.5s)", "te
 const ok10 = await runCheck("Global polish: motion, reduced motion, focus, overflow", "tests/browser/polish.browser.mts", { MOCK_SKILLGAP: "ok", MOCK_DELAY_MS: "1500" });
 const ok11 = await runCheck("Responsive layout and accessibility: 6 widths, pixel contrast, focus, announcements", "tests/browser/a11y-responsive.browser.mts", { MOCK_SKILLGAP: "ok", MOCK_DELAY_MS: "300" });
 const ok12 = await runCheck("Final motion polish: reveal, feedback, reduced motion, print", "tests/browser/motion.browser.mts", { MOCK_SKILLGAP: "ok" });
-const allOk = ok1 && ok2 && ok3 && ok4 && ok5 && ok6 && ok7 && ok8 && ok9 && ok10 && ok11 && ok12;
+const ok13 = await runCheck("CV Analyzer: upload, redaction, consent, analysis, shared cooldown", "tests/browser/cv-analyzer.browser.mts", { MOCK_DELAY_MS: "800" });
+const allOk = ok1 && ok2 && ok3 && ok4 && ok5 && ok6 && ok7 && ok8 && ok9 && ok10 && ok11 && ok12 && ok13;
 console.log(`\nBROWSER CHECKS: ${allOk ? "all passed" : "FAILED"}`);
 process.exit(allOk ? 0 : 1);

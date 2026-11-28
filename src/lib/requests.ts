@@ -170,6 +170,8 @@ export function createRequestCoordinator(
   let searchId = 0;
   let activeSearchKey: string | null = null;
   const inFlight = new InFlightRequests(() => store.onRequestsChanged());
+  // Separate map for runShared(), so a new assessment session never clears it.
+  const sharedInFlight = new InFlightRequests(() => store.onRequestsChanged());
   const failed = new Set<string>();
 
   const now = options.now ?? (() => Date.now());
@@ -360,7 +362,31 @@ export function createRequestCoordinator(
       return cooldownUntil;
     },
     isCoolingDown,
+    /**
+     * Shared protection for features outside this coordinator (the CV
+     * Analyzer), so they follow exactly the same rules as the career features:
+     * - nothing is sent during the global cooldown (returns null);
+     * - concurrent calls with the same key share one request (no duplicates);
+     * - a 503/429 response starts the same global cooldown.
+     * Not tied to the assessment session ("New Assessment" does not cancel it).
+     */
+    runShared<T>(key: string, send: () => Promise<ApiResult<T>>): Promise<ApiResult<T>> | null {
+      if (isCoolingDown()) return null;
+      return sharedInFlight.run(sharedKey(key), async () => {
+        const result = await send();
+        noteStatus(result.status);
+        return result;
+      });
+    },
+    isSharedPending(key: string): boolean {
+      return sharedInFlight.has(sharedKey(key));
+    },
   };
+}
+
+/** Keys for runShared(); cannot collide with the career features' keys. */
+function sharedKey(key: string): string {
+  return JSON.stringify(["shared", key]);
 }
 
 export type RequestCoordinator = ReturnType<typeof createRequestCoordinator>;

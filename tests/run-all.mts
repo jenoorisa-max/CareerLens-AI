@@ -12,7 +12,9 @@ const fast = process.argv.includes("--fast");
 const SUITES = [
   "tests/server/handlers.test.mts",              // Step A: shared handlers, validation, API wrappers
   "tests/server/gemini.test.mts",                // Step B/B2: retries, timeouts, 75s budget, safe errors, logs
+  "tests/server/gemini-parts.test.mts",          // CV Analyzer Stage 2: optional inline PDF/image parts, text-only unchanged
   "tests/server/express.test.mts",               // Local server: SPA fallback, API 404/405, JSON errors, npm start, vercel.json
+  "tests/server/cv-analyze.test.mts",            // CV Analyzer Stage 3: /api/cv-analyze validation, consent, privacy, AI output
   "tests/frontend/api-and-display.test.mts",     // D1: postJSON, score clamping, padding, render
   "tests/frontend/request-coordination.test.mts",// D2 + follow-up: dedupe, sessions, roadmap wait, failures
   "tests/frontend/cooldown.test.mts",            // D3: 15s cooldown after 503/429
@@ -28,6 +30,7 @@ const SUITES = [
   "tests/frontend/polish.test.mts",              // Phase 1 global polish: motion classes, reduced motion, consistency
   "tests/frontend/visual.test.mts",              // Phase 1 depth/atmosphere classes, tint contrast, a11y structure
   "tests/frontend/motion.test.mts",              // Phase 1 final motion polish and complete reduced-motion support
+  "tests/frontend/cv-analyzer.test.mts",         // CV Analyzer Stage 4: upload rules, redaction, DOCX, request, shared cooldown, rendering
 ];
 
 const env = { ...process.env };

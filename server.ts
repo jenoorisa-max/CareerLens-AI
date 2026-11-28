@@ -9,6 +9,8 @@ import {
   handleRoadmap,
   handleSkillGap,
 } from "./src/server/handlers.ts";
+import { handleCvAnalyze } from "./src/server/cv/handlers.ts";
+import { CV_LIMITS } from "./src/shared/cvLimits.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,10 +25,16 @@ if (process.argv.includes("--production")) {
 // Schemas, prompts, validation and handler logic live in src/server/ and are
 // shared with the Vercel functions in api/, so both entry points behave the same.
 
-const API_POST_ROUTES = ["/api/careers", "/api/skill-gap", "/api/roadmap"];
+const API_POST_ROUTES = ["/api/careers", "/api/skill-gap", "/api/roadmap", "/api/cv-analyze"];
 
 async function startServer() {
   const app = express();
+  // CV analysis carries file uploads, so it has its own body limit and is
+  // registered before the global 1mb parser (which therefore never runs for it).
+  app.post("/api/cv-analyze", express.json({ limit: CV_LIMITS.maxRequestBytes }), async (req, res) => {
+    const result = await handleCvAnalyze(req.body);
+    res.status(result.status).json(result.body);
+  });
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/api/health", (_req, res) => {

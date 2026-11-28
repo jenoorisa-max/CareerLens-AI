@@ -6,6 +6,7 @@ import DashboardOverview from "./components/DashboardOverview";
 import CareerFinder from "./components/CareerFinder";
 import SkillGapAnalyzer from "./components/SkillGapAnalyzer";
 import LearningRoadmap from "./components/LearningRoadmap";
+import CvAnalyzer from "./features/cv/CvAnalyzer";
 import type {
   ActiveTab,
   CareerFinderResponse,
@@ -76,6 +77,14 @@ export default function App() {
   );
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // CV Analyzer: mounted on first visit and then kept mounted (hidden on other
+  // pages), so an uploaded CV and its results survive page switches without
+  // ever being written to the saved session.
+  const [cvOpened, setCvOpened] = useState(activeTab === "cv");
+  useEffect(() => {
+    if (activeTab === "cv") setCvOpened(true);
+  }, [activeTab]);
 
   // `profile` + `careerResults` always belong together (the committed
   // assessment). A new search is tracked separately until it succeeds.
@@ -331,6 +340,8 @@ export default function App() {
       ? "Career Finder"
       : activeTab === "skill-gap"
       ? "Skill Gap Analyzer"
+      : activeTab === "cv"
+      ? "CV Analyzer"
       : "Learning Roadmap";
 
   if (view === "landing") {
@@ -512,6 +523,11 @@ export default function App() {
               }
               onGoToFinder={() => setActiveTab("finder")}
             />
+          )}
+          {(cvOpened || activeTab === "cv") && (
+            <div hidden={activeTab !== "cv"}>
+              <CvAnalyzer runShared={requests.runShared} cooldownSeconds={cooldownSeconds} />
+            </div>
           )}
         </main>
       </div>

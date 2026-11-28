@@ -41,8 +41,8 @@ try {
   await waitFor(`!window.__beforeReload && document.readyState === 'complete' && !!document.querySelector('#student-name')`, 30000, "reload");
 
   console.log("--- sidebar and empty Dashboard");
-  check("sidebar shows Dashboard, Career Finder, Skill Gap Analyzer, Learning Roadmap",
-    await js(`['Dashboard','Career Finder','Skill Gap Analyzer','Learning Roadmap'].every(t => [...document.querySelectorAll('aside nav button')].some(b => b.textContent.includes(t)))`));
+  check("sidebar shows Dashboard, Career Finder, Skill Gap Analyzer, Learning Roadmap, CV Analyzer",
+    await js(`['Dashboard','Career Finder','Skill Gap Analyzer','Learning Roadmap','CV Analyzer'].every(t => [...document.querySelectorAll('aside nav button')].some(b => b.textContent.includes(t)))`));
   check("current page marked with aria-current=page (Career Finder for a new user)",
     (await js(`document.querySelector('aside nav button[aria-current="page"]')?.textContent`))?.includes("Career Finder"));
   await nav("Dashboard"); await sleep(300);
@@ -114,9 +114,9 @@ try {
   await viewport(390, 844, true); await sleep(300);
   check("mobile 390px: no horizontal overflow", await noOverflow());
   await click(`document.querySelector('[aria-controls="app-mobile-drawer"]')`); await sleep(250);
-  check("menu opens a drawer dialog with the 4 navigation items, focus moved into it",
+  check("menu opens a drawer dialog with the 5 navigation items (incl. CV Analyzer), focus moved into it",
     (await js(`document.querySelector('#app-mobile-drawer')?.getAttribute('role')`)) === "dialog" &&
-    (await js(`document.querySelectorAll('#app-mobile-drawer nav button').length`)) === 4 &&
+    (await js(`document.querySelectorAll('#app-mobile-drawer nav button').length`)) === 5 &&
     (await js(`document.querySelector('#app-mobile-drawer').contains(document.activeElement)`)));
   await key("Escape", "Escape", 27);
   check("Escape closes the drawer and returns focus to the menu button",

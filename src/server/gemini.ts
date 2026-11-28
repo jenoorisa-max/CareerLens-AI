@@ -1,11 +1,63 @@
 import {
   ApiError,
   GoogleGenAI,
+  type ContentListUnion,
   type GenerateContentResponse,
   type Schema,
 } from "@google/genai";
 
 const DEFAULT_MODEL = "gemini-3.1-flash-lite";
+
+// ---------------------------------------------------------------------------
+// Optional file input (PDF / image), sent inline with the prompt.
+// ---------------------------------------------------------------------------
+
+/** File types Gemini reads natively that CareerLens accepts. */
+export const GEMINI_INLINE_MIME_TYPES = ["application/pdf", "image/png", "image/jpeg"] as const;
+export type GeminiInlineMimeType = (typeof GEMINI_INLINE_MIME_TYPES)[number];
+
+/**
+ * One file sent inline with a request. `data` is the file's base64 content
+ * without a "data:" URL prefix. Size, count and content checks belong to the
+ * calling endpoint; this module only checks the structure.
+ */
+export interface GeminiInlinePart {
+  mimeType: GeminiInlineMimeType;
+  data: string;
+}
+
+const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/**
+ * Text only (no parts, or an empty list): the prompt string, exactly as before.
+ * With parts: one user turn with the files first, then the prompt text (the
+ * order Gemini's document and image guides recommend).
+ */
+function buildContents(prompt: string, parts?: readonly GeminiInlinePart[]): ContentListUnion {
+  if (!parts || parts.length === 0) return prompt;
+  return [
+    {
+      role: "user",
+      parts: [
+        ...parts.map((part) => ({ inlineData: { mimeType: part.mimeType, data: part.data } })),
+        { text: prompt },
+      ],
+    },
+  ];
+}
+
+/** Structure check for inline parts; the error detail never contains file data. */
+function checkInlineParts(parts: readonly GeminiInlinePart[] | undefined): void {
+  if (!parts) return;
+  parts.forEach((part, index) => {
+    if (!(GEMINI_INLINE_MIME_TYPES as readonly string[]).includes(part?.mimeType)) {
+      throw new GeminiFailure("unknown", `inline part ${index}: unsupported mimeType`);
+    }
+    if (typeof part.data !== "string" || part.data.length === 0 || !BASE64_PATTERN.test(part.data)) {
+      throw new GeminiFailure("unknown", `inline part ${index}: data is not base64`);
+    }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Timing and retry policy (all durations in milliseconds)
@@ -188,6 +240,11 @@ function redactSecrets(text: string, apiKey: string | undefined): string {
   return safe.replace(/AIza[0-9A-Za-z_-]{20,}/g, "[REDACTED]");
 }
 
+/** Defence in depth: a long base64 run in an error message would be file data. */
+function redactInlineData(text: string): string {
+  return text.replace(/[A-Za-z0-9+/]{200,}={0,2}/g, "[DATA]");
+}
+
 /**
  * One concise line per failure. Never includes prompts, API keys or student
  * data: `detail` only ever holds error metadata, and JSON/shape failures only
@@ -206,7 +263,7 @@ function logFailure(
     attempt,
     model,
     retrying,
-    detail: redactSecrets(failure.detail, apiKey).slice(0, LOG_DETAIL_MAX_CHARS),
+    detail: redactInlineData(redactSecrets(failure.detail, apiKey)).slice(0, LOG_DETAIL_MAX_CHARS),
   };
   console.error(`[gemini] request failed ${JSON.stringify(entry)}`);
 }
@@ -214,7 +271,12 @@ function logFailure(
 async function requestWithTimeout(
   ai: GoogleGenAI,
   model: string,
-  params: { systemInstruction: string; prompt: string; responseSchema: Schema },
+  params: {
+    systemInstruction: string;
+    prompt: string;
+    responseSchema: Schema;
+    parts?: readonly GeminiInlinePart[];
+  },
   timeoutMs: number
 ): Promise<GenerateContentResponse> {
   const controller = new AbortController();
@@ -222,7 +284,7 @@ async function requestWithTimeout(
 
   const request = ai.models.generateContent({
     model,
-    contents: params.prompt,
+    contents: buildContents(params.prompt, params.parts),
     config: {
       systemInstruction: params.systemInstruction,
       responseMimeType: "application/json",
@@ -281,11 +343,17 @@ export async function generateStructuredJSON<T>(params: {
    * short field path describing the first problem (logged, never shown to users).
    */
   validate?: (data: unknown) => string | null;
+  /**
+   * Optional PDF/image files sent inline with the prompt. Omitted or empty:
+   * the request is exactly the existing text-only request.
+   */
+  parts?: readonly GeminiInlinePart[];
 }): Promise<T> {
   const deadline = Date.now() + TOTAL_BUDGET_MS;
 
   let client: ReturnType<typeof getGeminiClient>;
   try {
+    checkInlineParts(params.parts);
     client = getGeminiClient();
   } catch (error) {
     const failure = toFailure(error);

@@ -11,6 +11,25 @@ const stage = (n: number) => ({ stageNumber: n, title: `Stage ${n}`, duration: "
   resources: [{ title: "Resource", type: "Course", description: "Desc" }], project: { title: "Project", description: "Desc", deliverables: ["One"] } });
 const ROADMAP = { careerTitle: "Mock Career 1", totalDuration: "8 weeks", overview: "Overview", stages: [1, 2, 3, 4].map(stage), careerLaunchTip: "Tip" };
 
+function mockCvAnalysis(withJobMatch: boolean) {
+  const sc = (score: number, explanation: string) => ({ score, explanation });
+  return {
+    cvReadable: true, readabilityNote: "", candidateStage: "Student", overallScore: 72,
+    overallSummary: "A solid student CV with relevant projects; descriptions could show more impact.",
+    categoryScores: { contentQuality: sc(68, "Projects are relevant but outcomes are vague."), completeness: sc(74, "Core sections are present."),
+      careerRelevance: sc(80, "Skills fit software roles."), professionalPresentation: sc(70, "Mostly consistent formatting.") },
+    strengths: ["Relevant Flutter project", "Clear education section"], weaknesses: ["Vague society role", "No summary"],
+    missingSections: [{ section: "Professional summary", importance: "Recommended", suggestion: "Add a two-line summary of your goals." }],
+    languageIssues: [{ type: "Style", excerpt: "Helped with various tasks", issue: "Vague wording", suggestion: "Name the tasks you did." }],
+    weakDescriptions: [{ excerpt: "Helped with various tasks in the computing society.", problem: "Generic", suggestion: "Describe a specific contribution." }],
+    formattingIssues: [{ issue: "Dates are missing for projects", suggestion: "Add month and year to each project." }],
+    ats: { estimatedScore: 66, summary: "Mostly parseable; simple layout.", parsingRisks: ["Contact details on one line with separators"] },
+    keywords: { present: ["Flutter", "Python"], missing: ["Git", "REST APIs"] },
+    improvements: [{ priority: "Low", action: "Add a summary", reason: "Helps recruiters scan." }, { priority: "High", action: "Quantify your attendance app", reason: "Shows impact." }],
+    ...(withJobMatch ? { jobMatch: { matchScore: 74, summary: "Good fit for a junior mobile role.", matchedRequirements: ["Flutter"], gaps: ["Git"] } } : {}),
+  };
+}
+
 const realFetch = globalThis.fetch;
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 globalThis.fetch = (async (url: any, init?: any) => {
@@ -21,6 +40,17 @@ globalThis.fetch = (async (url: any, init?: any) => {
   // MOCK_CAREERS_STATUS makes the career search fail with that HTTP status.
   const delay = Number(process.env.MOCK_DELAY_MS || 0);
   if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+  // CV Analyzer: markers in the job description pick a scenario
+  // (MOCK_UNREADABLE -> unreadable verdict, MOCK_OVERLOAD -> 503).
+  if (body.includes("Analyse this CV")) {
+    if (body.includes("MOCK_OVERLOAD")) {
+      console.log("[mock] cv-analyze -> 503");
+      return json({ error: { code: 503, message: "The model is overloaded", status: "UNAVAILABLE" } }, 503);
+    }
+    const cv = body.includes("MOCK_UNREADABLE") ? { cvReadable: false, readabilityNote: "Page 2 is too blurry to read." } : mockCvAnalysis(body.includes("JOB_DESCRIPTION"));
+    console.log(`[mock] cv-analyze -> 200${body.includes("MOCK_UNREADABLE") ? " (unreadable)" : ""}`);
+    return json({ candidates: [{ content: { role: "model", parts: [{ text: JSON.stringify(cv) }] }, finishReason: "STOP" }] });
+  }
   const isCareers = !body.includes("Skill Gap Analysis") && !body.includes("Learning Roadmap");
   if (isCareers && process.env.MOCK_CAREERS_STATUS) {
     const status = Number(process.env.MOCK_CAREERS_STATUS);

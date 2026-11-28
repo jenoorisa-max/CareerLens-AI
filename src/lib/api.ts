@@ -4,7 +4,8 @@
 
 export type ApiResult<T> =
   | { ok: true; status: number; data: T }
-  | { ok: false; status: number; message: string };
+  /** `code` / `detail`: optional machine-readable extras some endpoints send (CV Analyzer). */
+  | { ok: false; status: number; message: string; code?: string; detail?: string };
 
 /**
  * The server always answers within its 75s Gemini budget, so this only stops
@@ -75,7 +76,7 @@ export async function postJSON<T>(
     const payload = parseJSON(text);
     const record =
       payload !== null && typeof payload === "object" && !Array.isArray(payload)
-        ? (payload as { data?: unknown; error?: unknown })
+        ? (payload as { data?: unknown; error?: unknown; code?: unknown; detail?: unknown })
         : null;
 
     if (response.ok && record && record.data !== undefined && record.data !== null) {
@@ -87,10 +88,14 @@ export async function postJSON<T>(
         ? record.error.trim()
         : null;
 
+    const code = record && typeof record.code === "string" ? record.code : undefined;
+    const detail = record && typeof record.detail === "string" && record.detail.trim() ? record.detail.trim() : undefined;
     return {
       ok: false,
       status: response.status,
       message: serverMessage ?? messageForStatus(response.status, fallbackMessage),
+      ...(code ? { code } : {}),
+      ...(detail ? { detail } : {}),
     };
   } finally {
     clearTimeout(timer);
